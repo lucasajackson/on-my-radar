@@ -32,6 +32,7 @@ import {
   useRadars,
   useSession,
   useSignOut,
+  useSingleUser,
   useTopics,
 } from '../lib/session';
 import { Mark, RadarGlyph } from './primitives';
@@ -162,6 +163,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const router = useRouter();
   const client = useQueryClient();
   const signOut = useSignOut();
+  const singleUser = useSingleUser();
   const path = useRouterState({ select: (state) => state.location.pathname });
   // Where this entry sits in the session history; see `advance` in navstack.
   const historyIndex = useRouterState({ select: (state) => state.location.state.__TSR_index });
@@ -604,14 +606,16 @@ export function AppShell({ children }: { children: ReactNode }) {
           <SidebarLink to="/settings" icon={<Settings className="h-4 w-4 opacity-70" />}>
             Settings
           </SidebarLink>
-          <button
-            className="sidebar-item w-full text-left"
-            data-rail-label="Sign out"
-            onClick={() => void signOut()}
-          >
-            <LogOut className="h-4 w-4 shrink-0 opacity-70" />
-            <span className="sidebar-label">Sign out</span>
-          </button>
+          {singleUser ? null : (
+            <button
+              className="sidebar-item w-full text-left"
+              data-rail-label="Sign out"
+              onClick={() => void signOut()}
+            >
+              <LogOut className="h-4 w-4 shrink-0 opacity-70" />
+              <span className="sidebar-label">Sign out</span>
+            </button>
+          )}
           <div className="sidebar-label truncate px-2.5 pt-1.5 pb-1">
             <span className="instrument truncate">{user?.email}</span>
           </div>

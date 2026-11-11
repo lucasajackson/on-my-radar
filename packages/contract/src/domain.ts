@@ -805,6 +805,16 @@ export const WAITLIST = {
   requestsPerNetworkPerHour: 10,
 } as const;
 
+/** Password sign-in (self-hosted instances; `PASSWORD_LOGIN_ENABLED`). */
+export const PASSWORD = {
+  minLength: 12,
+  maxLength: 256,
+  /** Per network, per hour, every password attempt of any outcome. */
+  attemptsPerNetworkPerHour: 60,
+  /** Wrong passwords per address per day; reaching it locks password sign-in for a day. */
+  failuresPerAddressPerDay: 20,
+} as const;
+
 export const SESSION_TTL_DAYS = 30;
 
 /**

@@ -3,10 +3,14 @@
 #   export SESSION_SECRET=$(openssl rand -hex 32)
 #   docker compose up --build        # then open http://localhost:3500
 #
-# No mail account needed: sign-in codes are emailed to a bundled Mailpit inbox,
-# which you read at http://localhost:8025. Keep the ports on localhost. For a real
-# deployment point MAIL_PROVIDER at resend or your own smtp, set PUBLIC_URL to your
-# public address and put TLS in front. Every variable is documented in .env.example.
+# Out of the box this is single-user mode: you are signed in as SINGLE_USER_EMAIL with
+# no sign-in step, and the app refuses to start on a host that is not your own machine
+# or network. Keep the ports on localhost. Mail goes to a bundled Mailpit inbox you read
+# at http://localhost:8025.
+#
+# For a real host: set SINGLE_USER_EMAIL= (empty), PUBLIC_URL to your public address,
+# MAIL_PROVIDER and SMTP_URL (or OIDC_*), PASSWORD_LOGIN_ENABLED=true if you want
+# passwords, and put TLS in front. See the README. Every variable is in .env.example.
 #
 # Attachments are off until you add S3_ENDPOINT, S3_ACCESS_KEY and S3_SECRET_KEY
 # (and S3_BUCKET) under `environment:` for any S3-compatible store. Object storage
@@ -24,8 +28,18 @@ x-app: &app
     postgres: { condition: service_healthy }
   environment:
     NODE_ENV: production
-    MAIL_PROVIDER: smtp
-    SMTP_URL: smtp://mailpit:1025?tls=none
+    # Set empty to turn single-user mode off (then use PASSWORD_LOGIN_ENABLED and/or OIDC_*).
+    SINGLE_USER_EMAIL: ${SINGLE_USER_EMAIL-me@example.com}
+    PASSWORD_LOGIN_ENABLED: ${PASSWORD_LOGIN_ENABLED:-}
+    MAIL_PROVIDER: ${MAIL_PROVIDER:-smtp}
+    SMTP_URL: ${SMTP_URL:-smtp://mailpit:1025?tls=none}
+    MAIL_FROM: ${MAIL_FROM:-}
+    OIDC_ISSUER_URL: ${OIDC_ISSUER_URL:-}
+    OIDC_CLIENT_ID: ${OIDC_CLIENT_ID:-}
+    OIDC_CLIENT_SECRET: ${OIDC_CLIENT_SECRET:-}
+    OIDC_PROVIDER_NAME: ${OIDC_PROVIDER_NAME:-SSO}
+    # Behind your own proxy, the header it sets to the client's address (x-real-ip).
+    TRUSTED_IP_HEADER: ${TRUSTED_IP_HEADER:-cf-connecting-ip}
     PUBLIC_URL: ${PUBLIC_URL:-http://localhost:3500}
     DATABASE_URL: postgres://onmyradar:${POSTGRES_PASSWORD:-onmyradar}@postgres:5432/onmyradar
     SESSION_SECRET: ${SESSION_SECRET:?set SESSION_SECRET, e.g. export SESSION_SECRET=$(openssl rand -hex 32)}

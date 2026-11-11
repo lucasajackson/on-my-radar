@@ -11,6 +11,8 @@
  * server booting.
  */
 import { z } from 'zod';
+import { emailSchema } from '@onmyradar/contract';
+import { isLocalHost } from './local-host.js';
 import { parseSmtpUrl } from './smtp-url.js';
 
 const bool = (dflt: boolean) =>
@@ -242,7 +244,7 @@ const envSchema = z.object({
     .optional(),
   EMAIL_INGEST_SECRET: z.string().min(32).optional(),
   /** Default: `On My Radar <noreply@<PUBLIC_URL host>>`, filled in by `loadEnv`. */
-  MAIL_FROM: z.string().optional(),
+  MAIL_FROM: z.preprocess((v) => (v === '' ? undefined : v), z.string().optional()),
 
   /* --- browser push (VAPID, RFC 8292) --- */
   /**
@@ -333,6 +335,16 @@ const envSchema = z.object({
    * `waitlist`: new accounts wait for an admin unless a list above covers them.
    */
   SIGNUP_MODE: z.enum(['open', 'waitlist']).default('open'),
+
+  /**
+   * Single-user mode, for an instance only its owner can reach (a laptop, a home
+   * server): the browser is signed in as this one account with no sign-in step.
+   * Empty means off. Refused at boot unless `PUBLIC_URL` and `APP_URL` are local
+   * hosts, and unless password and SSO sign-in are off. See `auth/single-user.ts`.
+   */
+  SINGLE_USER_EMAIL: z.preprocess((v) => (v === '' ? undefined : v), emailSchema.optional()),
+  /** Sign in with an email address and a password. Needs working mail: reset goes by code. */
+  PASSWORD_LOGIN_ENABLED: bool(false),
 
   /* --- MCP --- */
   MCP_ENABLED: bool(true),
@@ -428,7 +440,7 @@ export function loadEnv(source: NodeJS.ProcessEnv = process.env): Env {
   const errors = GITLAB_TOKEN_SETTINGS.filter(
     (name) => (name === 'GITLAB_READ_TOKENS' ? read : mirror) === null,
   );
-  return {
+  const config: Env = {
     ...parsed.data,
     APP_URL: parsed.data.APP_URL ?? parsed.data.PUBLIC_URL,
     MAIL_FROM: mailFrom,
@@ -440,6 +452,32 @@ export function loadEnv(source: NodeJS.ProcessEnv = process.env): Env {
     BRIEF_MIRROR_ENABLED: parsed.data.BRIEF_MIRROR_ENABLED && mirror !== null,
     GITLAB_TOKEN_ERRORS: errors,
   };
+  validateAuth(config);
+  return config;
+}
+
+/**
+ * How people may sign in has to hang together; refused at boot, not at the first request.
+ * Single-user mode has no override flag: an instance that anyone can reach signs in with
+ * a password or SSO.
+ */
+function validateAuth(config: Env): void {
+  if (config.SINGLE_USER_EMAIL) {
+    for (const url of [config.PUBLIC_URL, config.APP_URL]) {
+      if (!isLocalHost(new URL(url).hostname))
+        throw new Error(
+          `Invalid environment: SINGLE_USER_EMAIL signs in anyone who can reach the server, so ${url} must be a local host (localhost, a private address, .local, .lan, .internal). For a public host, leave SINGLE_USER_EMAIL empty and use PASSWORD_LOGIN_ENABLED or SSO`,
+        );
+    }
+    if (config.PASSWORD_LOGIN_ENABLED || oidcConfigured(config))
+      throw new Error(
+        'Invalid environment: SINGLE_USER_EMAIL cannot be combined with PASSWORD_LOGIN_ENABLED or OIDC sign-in',
+      );
+  }
+  if (config.PASSWORD_LOGIN_ENABLED && mailProvider(config) === 'none')
+    throw new Error(
+      'Invalid environment: PASSWORD_LOGIN_ENABLED needs outbound mail (a forgotten password is reset by an emailed code); set MAIL_PROVIDER and SMTP_URL',
+    );
 }
 
 /** True when every value the S3 client needs is present. */

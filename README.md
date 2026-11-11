@@ -16,11 +16,11 @@ It also speaks **MCP**, so you can point an AI agent at a radar and say _"read t
 - **Dashboards**: tabs of radars you drag and resize.
 - **Webhooks, RSS and email capture**: anything that can POST, publish a feed or send an email becomes a blip. Outbound webhooks tell your own systems what changed.
 - **Agents**: an MCP server at `/mcp` with OAuth for remote clients and personal access tokens for local ones. The Agent Repo keeps each agent's prompt, memory and briefs in On My Radar, so it follows you to any device and tool.
-- **Sign-in**: a six-digit code by email, or any OpenID Connect provider.
+- **Sign-in**: no sign-in at all on your own machine, or a password, a six-digit code by email, or any OpenID Connect provider on a real host.
 
 ## Self-host
 
-### Docker Compose
+### Docker Compose, on your own machine
 
 ```bash
 git clone https://github.com/lucasajackson/on-my-radar.git && cd on-my-radar
@@ -28,7 +28,22 @@ export SESSION_SECRET=$(openssl rand -hex 32)
 docker compose up --build
 ```
 
-Open <http://localhost:3500>. Enter any email address, then read the six-digit sign-in code in the bundled Mailpit inbox at <http://localhost:8025>; no mail account is needed. Set `ADMIN_EMAILS=you@example.com` first to get the admin screen. The compose file is for trying it out on one machine; read its header before exposing it to a network.
+Open <http://localhost:3500> and you are in: this is **single-user mode**, signed in as `SINGLE_USER_EMAIL` (default `me@example.com`, set it to your own) with no sign-in step. It is only allowed where the instance's own address is local (`localhost`, a private network address, `.local`, `.lan`, `.internal`); the app refuses to start otherwise, and answers any other `Host` with 421 so a hostile web page cannot reach it by DNS trickery. Use that address exactly: `http://127.0.0.1:3500` is a different name and gets 421, so to reach it another way set `PUBLIC_URL` to that address. Mail goes to the bundled Mailpit inbox at <http://localhost:8025>.
+
+Two things to know. Any local process that can reach the port is you, including a coding agent with a shell, so keep the port on `127.0.0.1`. And `/mcp` is not open to the browser session: agents connect with a personal access token (Settings, Connections) or OAuth, as everywhere else.
+
+### Docker Compose, on a real host
+
+Put TLS in front (Caddy, nginx, a tunnel) and set, in the environment or an `.env` file next to `docker-compose.yml`:
+
+- `SINGLE_USER_EMAIL=` (empty), which turns single-user mode off.
+- `PUBLIC_URL=https://notes.example.com`.
+- Mail, because sign-in codes and password resets are emailed: `MAIL_PROVIDER=smtp` and `SMTP_URL=smtp://user:password@smtp.example.com:587` (STARTTLS is required; `smtps://` works too). Also `MAIL_FROM`, an address your relay may send from: most reject the default `noreply@<your host>`. A relay with a private CA needs `NODE_EXTRA_CA_CERTS=/path/ca.pem` in the container.
+- How people sign in: `PASSWORD_LOGIN_ENABLED=true` for email and password (12+ characters, reset by an emailed code; people with no password yet set one in Settings), and/or the `OIDC_*` group for a single sign-on provider. The emailed code always works too.
+- `TRUSTED_IP_HEADER=x-real-ip`, with your proxy setting that header to the client's address. Sign-in limits are per network, and the default header (`cf-connecting-ip`) can be forged by anyone when you are not behind Cloudflare.
+- `ADMIN_EMAILS` for the admin screen, and `SIGNUP_MODE=waitlist` if you do not want strangers creating accounts.
+
+Password sign-in never creates an account; the first sign-in of a new person is the emailed code. Anyone can lock an address's password sign-in for a day by guessing wrongly 20 times; the code and SSO still work.
 
 ### From source
 
@@ -45,7 +60,7 @@ In development, with no mail provider set, the sign-in code is shown on the logi
 
 ### Configuration
 
-Every environment variable is documented in [`.env.example`](.env.example) and validated at boot by `packages/server/src/env.ts`. The ones you will reach for first: `DATABASE_URL`, `SESSION_SECRET`, `PUBLIC_URL`, `MAIL_PROVIDER` (`resend`, `smtp` or `console`), `SIGNUP_MODE`, `ADMIN_EMAILS`, the `S3_*` group for attachments (any S3-compatible store) and the `OIDC_*` group for single sign-on.
+Every environment variable is documented in [`.env.example`](.env.example) and validated at boot by `packages/server/src/env.ts`. The ones you will reach for first: `DATABASE_URL`, `SESSION_SECRET`, `PUBLIC_URL`, `MAIL_PROVIDER` (`resend`, `smtp` or `console`), `SIGNUP_MODE`, `ADMIN_EMAILS`, `SINGLE_USER_EMAIL`, `PASSWORD_LOGIN_ENABLED`, the `S3_*` group for attachments (any S3-compatible store) and the `OIDC_*` group for single sign-on.
 
 ## Documentation
 

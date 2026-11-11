@@ -133,6 +133,12 @@ export const ACCOUNT_EXPORT_TABLES: readonly ExportTablePolicy[] = [
     reason: 'Authentication rate limits',
   },
   {
+    table: 'user_passwords',
+    include: [],
+    exclude: ['user_id', 'hash', 'created_at', 'updated_at'],
+    reason: 'Authentication credentials',
+  },
+  {
     table: 'login_verify_limits',
     include: [],
     exclude: ['key', 'window_started_at', 'window_count', 'locked_until'],

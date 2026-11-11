@@ -22,7 +22,7 @@ import { useEffect, useState } from 'react';
 import { Link, useSearch } from '@tanstack/react-router';
 import { useQuery } from '@tanstack/react-query';
 import { ArrowRight, KeyRound, Loader2, Mail } from 'lucide-react';
-import { safeNextPath, type InvitePreviewDto } from '@onmyradar/contract';
+import { PASSWORD, safeNextPath, type InvitePreviewDto } from '@onmyradar/contract';
 import { ApiError, api } from '../lib/api';
 import { queryKeys, useSession } from '../lib/session';
 import { Mark, notify } from '../components/primitives';
@@ -106,6 +106,10 @@ export function LoginRoute({
   // invitation stays where it was addressed.
   const [email, setEmail] = useState(invite?.email ?? '');
   const [code, setCode] = useState('');
+  // Password sign-in, where the instance has it on: the default, with the emailed code as the other way in.
+  const [method, setMethod] = useState<'password' | 'code'>('password');
+  const [password, setPassword] = useState('');
+  const [resetting, setResetting] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(search.error ?? null);
   const [devCode, setDevCode] = useState<string | null>(null);
@@ -150,20 +154,40 @@ export function LoginRoute({
     }
   };
 
+  const finish = async (result: { user: { state: string }; next: string }) => {
+    await refresh();
+    notify('Signed in');
+    leaveLogin(result.user.state === 'active' ? result.next : '/waiting');
+  };
+
   const verify = async () => {
     setBusy(true);
     setError(null);
     try {
-      const result = await api.auth.verifyCode(email.trim(), code.trim(), destination);
-      await refresh();
-      notify('Signed in');
-      leaveLogin(result.user.state === 'active' ? result.next : '/waiting');
+      await finish(
+        resetting
+          ? await api.auth.resetPassword(email.trim(), code.trim(), password, destination)
+          : await api.auth.verifyCode(email.trim(), code.trim(), destination),
+      );
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Could not verify that code');
       setElsewhere(err instanceof ApiError && err.code === 'login_challenge_missing');
       setBusy(false);
     }
   };
+
+  const passwordSignIn = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      await finish(await api.auth.passwordLogin(email.trim(), password, destination));
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Could not sign in');
+      setBusy(false);
+    }
+  };
+
+  const passwordOn = config?.password?.enabled === true;
 
   return (
     <div className="auth-screen flex min-h-full items-center justify-center px-5 py-12">
@@ -186,7 +210,73 @@ export function LoginRoute({
         ) : null}
 
         <div className={`panel p-5 ${invite || inviteError ? 'mt-4' : 'mt-8'}`}>
-          {stage === 'email' ? (
+          {passwordOn && method === 'password' && stage === 'email' ? (
+            <form
+              className="flex flex-col gap-3"
+              onSubmit={(event) => {
+                event.preventDefault();
+                void passwordSignIn();
+              }}
+            >
+              <label className="flex flex-col gap-1.5">
+                <span className="instrument">Email address</span>
+                <input
+                  className="field"
+                  type="email"
+                  required
+                  autoFocus
+                  autoComplete="email"
+                  value={email}
+                  placeholder="you@example.com"
+                  onChange={(event) => setEmail(event.target.value)}
+                />
+              </label>
+              <label className="flex flex-col gap-1.5">
+                <span className="instrument">Password</span>
+                <input
+                  className="field"
+                  type="password"
+                  required
+                  autoComplete="current-password"
+                  value={password}
+                  onChange={(event) => setPassword(event.target.value)}
+                />
+              </label>
+              <button
+                className="btn btn-accent justify-center"
+                disabled={busy || !email.trim() || !password}
+              >
+                {busy ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <ArrowRight className="h-4 w-4" />
+                )}
+                Sign in
+              </button>
+              <button
+                type="button"
+                className="btn btn-ghost justify-center"
+                onClick={() => {
+                  setMethod('code');
+                  setError(null);
+                }}
+              >
+                Email me a code instead
+              </button>
+              <button
+                type="button"
+                className="btn btn-ghost justify-center"
+                disabled={busy || !email.trim()}
+                onClick={() => {
+                  setResetting(true);
+                  setPassword('');
+                  void requestCode();
+                }}
+              >
+                Forgot password
+              </button>
+            </form>
+          ) : stage === 'email' ? (
             <form
               className="flex flex-col gap-3"
               onSubmit={(event) => {
@@ -219,6 +309,15 @@ export function LoginRoute({
                   ? 'We will email you a six-digit code to prove the address is yours.'
                   : 'New here? The same code asks for an account. New accounts join a waitlist until they are approved.'}
               </p>
+              {passwordOn ? (
+                <button
+                  type="button"
+                  className="btn btn-ghost justify-center"
+                  onClick={() => setMethod('password')}
+                >
+                  Use a password instead
+                </button>
+              ) : null}
             </form>
           ) : (
             <form
@@ -244,6 +343,19 @@ export function LoginRoute({
                   onChange={(event) => setCode(event.target.value.replace(/\D/g, ''))}
                 />
               </label>
+              {resetting ? (
+                <label className="flex flex-col gap-1.5">
+                  <span className="instrument">New password</span>
+                  <input
+                    className="field"
+                    type="password"
+                    autoComplete="new-password"
+                    minLength={PASSWORD.minLength}
+                    value={password}
+                    onChange={(event) => setPassword(event.target.value)}
+                  />
+                </label>
+              ) : null}
               {devCode ? (
                 <p className="rounded-lg border border-dashed border-[color:var(--line)] px-3 py-2 text-center text-[12.5px] text-[color:var(--paper-dim)]">
                   No mail provider configured — your code is{' '}
@@ -252,14 +364,16 @@ export function LoginRoute({
               ) : null}
               <button
                 className="btn btn-accent justify-center"
-                disabled={busy || code.length !== 6}
+                disabled={
+                  busy || code.length !== 6 || (resetting && password.length < PASSWORD.minLength)
+                }
               >
                 {busy ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
                 ) : (
                   <ArrowRight className="h-4 w-4" />
                 )}
-                Sign in
+                {resetting ? 'Set password and sign in' : 'Sign in'}
               </button>
               <button
                 type="button"
@@ -267,6 +381,7 @@ export function LoginRoute({
                 onClick={() => {
                   setStage('email');
                   setCode('');
+                  setResetting(false);
                   setError(null);
                 }}
               >

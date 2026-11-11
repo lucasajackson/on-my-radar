@@ -287,6 +287,9 @@ export interface OAuthDecisionInput {
 export interface AuthConfig {
   email: { enabled: boolean; delivers: boolean };
   oidc: { enabled: boolean; name: string };
+  /** Absent from a server older than self-host sign-in. */
+  password?: { enabled: boolean };
+  singleUser?: boolean;
 }
 
 /**
@@ -446,6 +449,17 @@ export const api = {
       }),
     verifyCode: (email: string, code: string, next?: string) =>
       post<{ user: UserDto; next: string }>('/api/auth/verify-code', { email, code, next }),
+    passwordLogin: (email: string, password: string, next?: string) =>
+      post<{ user: UserDto; next: string }>('/api/auth/password/login', { email, password, next }),
+    resetPassword: (email: string, code: string, password: string, next?: string) =>
+      post<{ user: UserDto; next: string }>('/api/auth/password/reset', {
+        email,
+        code,
+        password,
+        next,
+      }),
+    setPassword: (input: { password: string; currentPassword?: string; code?: string }) =>
+      put<{ ok: true }>('/api/auth/password', input),
     logout: () => post<{ ok: true }>('/api/auth/logout'),
     updateProfile: (input: { name?: string | null; theme?: 'system' | 'light' | 'dark' }) =>
       patch<{ user: UserDto }>('/api/auth/profile', input),

@@ -270,6 +270,16 @@ export const loginVerifyLimits = pgTable(
   (t) => [index('login_verify_limits_window_idx').on(t.windowStartedAt)],
 );
 
+/** One scrypt hash per user, for password sign-in (0104). Never selected into a user row or DTO. */
+export const userPasswords = pgTable('user_passwords', {
+  userId: uuid('user_id')
+    .primaryKey()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  hash: text('hash').notNull(),
+  createdAt: ts('created_at').notNull().defaultNow(),
+  updatedAt: ts('updated_at').notNull().defaultNow(),
+});
+
 /** What the marketing site's waitlist form said, beside the pending user it created (0037). */
 export const waitlistRequests = pgTable('waitlist_requests', {
   userId: uuid('user_id')
@@ -1642,6 +1652,7 @@ export const ALL_TABLE_NAMES = [
   'request_idempotency',
   'email_relay_nonces',
   'upload_tickets',
+  'user_passwords',
 ] as const;
 
 /** Feed configuration and compact import tombstones; payloads live only in blips. */

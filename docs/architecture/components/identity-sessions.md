@@ -18,38 +18,44 @@ Decides who is signed in. It issues and checks the emailed one-time code, runs t
 - An account's initial state is decided at creation (`findOrCreateUser`); re-authenticating never un-suspends, though under `SIGNUP_MODE=open` a pending account is admitted on its next sign-in or session use (`admitOnOpenSignup`). `activateUser` touches only `pending` rows with a guarded `UPDATE … WHERE state = 'pending'` and is the single approval path (`auth/accounts.ts`; `routes/open-signup.test.ts`, `routes/waitlist.test.ts`).
 - A session cookie is `omr_session`, httpOnly and SameSite Lax; a native session is `omr_s_…` as a bearer token, returned in the body and never as a cookie. Resolving a session requires an unexpired row and `omr_account_open(user)`; suspending revokes every session that exists then, though a suspended person can sign in again to be told so, and that new session passes `resolveSession` but not `requireActor` (`auth/session.ts`, `routes/admin.ts`; `bearer-session.test.ts`).
 - Cross-site writes are refused by `Sec-Fetch-Site` or `Origin`, and bearer requests are exempt (`csrf.ts`).
+- Single-user mode (`SINGLE_USER_EMAIL`, self-hosted) signs the browser in as one account with no sign-in step, and is safe only because: boot refuses unless `PUBLIC_URL` and `APP_URL` are local hosts (`env.ts`, `local-host.ts`; `auth-env.test.ts`); any other Host gets 421, which stops a DNS-rebinding page (`singleUserHostFence`); the session is minted only in `GET /api/auth/session`, only for a request with no `Authorization`, our own Host and a same-origin or direct `Sec-Fetch-Site`, never for a suspended account; `/mcp` refuses cookie sessions; new invites are refused (`assertMayInvite`); and the code, SSO and password routes answer 404 (`auth/single-user.ts`; `auth/single-user.test.ts`).
+- Password sign-in (`PASSWORD_LOGIN_ENABLED`) never creates an account. Every miss (no such address, no password, a wrong password, a closed account) is one identical 401 and costs exactly one scrypt, after the `pw-net:` and `pw:` limits have been charged (`routes/auth.ts`, `auth/password.ts`, `auth/codes.ts`; `auth/password-login.test.ts`). Setting or resetting a password ends the other sessions, and only a session, never a token, may set one.
 - The waitlist form creates only `pending` users and nothing for an address that would skip the queue; every outcome returns the same body; one confirmation email per address per day is decided in the statement that charges it (`services/waitlist.ts`, `routes/waitlist.test.ts`).
 
 ## 2. Owned data
 
-| Owned                                      | Kind  | Notes                                                      |
-| ------------------------------------------ | ----- | ---------------------------------------------------------- |
-| `users`                                    | table |                                                            |
-| `identities`                               | table |                                                            |
-| `login_codes`                              | table |                                                            |
-| `login_code_limits`                        | table |                                                            |
-| `login_code_network_limits`                | table |                                                            |
-| `sessions`                                 | table |                                                            |
-| `waitlist_requests`                        | table |                                                            |
-| `packages/server/src/auth/codes.ts`        | file  | Code issue, verify, rate windows                           |
-| `packages/server/src/auth/crypto.ts`       | file  | HMAC hashing of tokens and codes, domain-separated signing |
-| `packages/server/src/auth/oidc.ts`         | file  | OIDC SSO client: discovery, token exchange, userinfo       |
-| `packages/server/src/auth/accounts.ts`     | file  | Account creation and the initial-state policy              |
-| `packages/server/src/auth/session.ts`      | file  | Session issue, resolve, revoke, cookie options             |
-| `packages/server/src/auth/middleware.ts`   | file  | `attachActor`: resolves the `Actor` for every request      |
-| `packages/server/src/auth/retention.ts`    | file  | Sweeps expired rows (run by the worker)                    |
-| `packages/server/src/auth/welcome.ts`      | file  | The welcome workspace for a new account                    |
-| `packages/server/src/csrf.ts`              | file  | Cross-site write refusal                                   |
-| `packages/server/src/cors.ts`              | file  | Bearer-only cross-origin access when configured            |
-| `packages/server/src/services/waitlist.ts` | file  | Waitlist requests and confirmation mail                    |
-| `packages/server/src/routes/auth.ts`       | file  | Mounted at `/api/auth` and `/api/v1/auth`                  |
-| `packages/server/src/routes/waitlist.ts`   | file  | Mounted at `/api/waitlist`                                 |
+| Owned                                      | Kind  | Notes                                                       |
+| ------------------------------------------ | ----- | ----------------------------------------------------------- |
+| `users`                                    | table |                                                             |
+| `identities`                               | table |                                                             |
+| `login_codes`                              | table |                                                             |
+| `login_code_limits`                        | table |                                                             |
+| `login_code_network_limits`                | table |                                                             |
+| `sessions`                                 | table |                                                             |
+| `user_passwords`                           | table | One scrypt hash per user, when password sign-in is on       |
+| `waitlist_requests`                        | table |                                                             |
+| `packages/server/src/auth/codes.ts`        | file  | Code issue, verify, rate windows                            |
+| `packages/server/src/auth/crypto.ts`       | file  | HMAC hashing of tokens and codes, domain-separated signing  |
+| `packages/server/src/auth/oidc.ts`         | file  | OIDC SSO client: discovery, token exchange, userinfo        |
+| `packages/server/src/auth/accounts.ts`     | file  | Account creation and the initial-state policy               |
+| `packages/server/src/auth/session.ts`      | file  | Session issue, resolve, revoke, cookie options              |
+| `packages/server/src/auth/middleware.ts`   | file  | `attachActor`: resolves the `Actor` for every request       |
+| `packages/server/src/auth/password.ts`     | file  | scrypt hashing and the `user_passwords` reads and writes    |
+| `packages/server/src/auth/single-user.ts`  | file  | Single-user mode: the Host fence and the one minted session |
+| `packages/server/src/local-host.ts`        | file  | Which hostnames count as local                              |
+| `packages/server/src/auth/retention.ts`    | file  | Sweeps expired rows (run by the worker)                     |
+| `packages/server/src/auth/welcome.ts`      | file  | The welcome workspace for a new account                     |
+| `packages/server/src/csrf.ts`              | file  | Cross-site write refusal                                    |
+| `packages/server/src/cors.ts`              | file  | Bearer-only cross-origin access when configured             |
+| `packages/server/src/services/waitlist.ts` | file  | Waitlist requests and confirmation mail                     |
+| `packages/server/src/routes/auth.ts`       | file  | Mounted at `/api/auth` and `/api/v1/auth`                   |
+| `packages/server/src/routes/waitlist.ts`   | file  | Mounted at `/api/waitlist`                                  |
 
 ## 3. Interface
 
-- **Routes (`/api/auth`):** `GET /config`, `GET /session`, `POST /request-code`, `POST /verify-code`, `GET /oidc/start`, `GET /oidc/callback`, `POST /logout`, `PATCH /profile`, `GET /sessions`, `DELETE /sessions/:id`. `POST /api/waitlist` is unauthenticated and returns 202. Admin approval is `GET /api/admin/users` and `POST /api/admin/users/:id` in `routes/admin.ts` (hosted by M24).
+- **Routes (`/api/auth`):** `GET /config`, `GET /session`, `POST /request-code`, `POST /verify-code`, `POST /password/login`, `POST /password/reset`, `PUT /password`, `GET /oidc/start`, `GET /oidc/callback`, `POST /logout`, `PATCH /profile`, `GET /sessions`, `DELETE /sessions/:id`. `POST /api/waitlist` is unauthenticated and returns 202. Admin approval is `GET /api/admin/users` and `POST /api/admin/users/:id` in `routes/admin.ts` (hosted by M24).
 - **MCP tools:** none. Every auth route is classified human-only in `mcp/capabilities.ts`.
-- **Configuration:** `SESSION_SECRET` (at least 32 characters), session lifetime 30 days (the constant `SESSION_TTL_DAYS` in `packages/contract/src/domain.ts`, not an env variable), `SIGNUP_MODE` (`open` or `waitlist`, default `waitlist`), `ADMIN_EMAILS`, `AUTO_APPROVE_EMAILS`, `TRUSTED_IP_HEADER` default `cf-connecting-ip`, `OIDC_ISSUER_URL`, `OIDC_CLIENT_ID`, `OIDC_CLIENT_SECRET`, `OIDC_PROVIDER_NAME`, `OIDC_SCOPES`, `OIDC_TOKEN_AUTH_METHOD`, `OIDC_USE_PKCE`, `OIDC_HTTP_TIMEOUT_MS`.
+- **Configuration:** `SESSION_SECRET` (at least 32 characters), session lifetime 30 days (the constant `SESSION_TTL_DAYS` in `packages/contract/src/domain.ts`, not an env variable), `SIGNUP_MODE` (`open` or `waitlist`, default `waitlist`), `ADMIN_EMAILS`, `AUTO_APPROVE_EMAILS`, `TRUSTED_IP_HEADER` default `cf-connecting-ip`, `OIDC_ISSUER_URL`, `OIDC_CLIENT_ID`, `OIDC_CLIENT_SECRET`, `OIDC_PROVIDER_NAME`, `OIDC_SCOPES`, `OIDC_TOKEN_AUTH_METHOD`, `OIDC_USE_PKCE`, `OIDC_HTTP_TIMEOUT_MS`, `SINGLE_USER_EMAIL`, `PASSWORD_LOGIN_ENABLED`.
 
 ## 4. Failure and degradation
 

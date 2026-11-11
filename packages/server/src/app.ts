@@ -14,6 +14,7 @@ import { observeHttp } from './metrics.js';
 import { routePath } from 'hono/route';
 import { withRequestGate } from './db/request-gate.js';
 import { attachActor, HELPDESK_PREFIX } from './auth/middleware.js';
+import { singleUserHostFence } from './auth/single-user.js';
 import { crossOriginAccess } from './cors.js';
 import { refuseCrossSiteWrites } from './csrf.js';
 import { getDb, schema } from './db/client.js';
@@ -79,6 +80,9 @@ export function createApp() {
 
   // First of all: a request that reached Cloudflare over plain http is answered with where to go.
   app.use('*', redirectToHttps());
+
+  // Single-user mode only: refuse a Host that is not ours, before anything else sees the request.
+  app.use('*', singleUserHostFence());
 
   // One query cap per request, so a single request cannot hold the whole pool.
   app.use('*', (_c, next) => withRequestGate(next));

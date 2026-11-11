@@ -1,5 +1,5 @@
 import { createRequire } from 'node:module';
-import { pino } from 'pino';
+import { pino, stdSerializers } from 'pino';
 import { env } from './env.js';
 
 /**
@@ -98,8 +98,21 @@ export const REDACTION = {
   },
 } as const;
 
+/**
+ * A password hash must not reach the log from any error, whatever carried it: a failed
+ * query's message, its `params`, or a cause. Applied to every serialized `err`.
+ */
+export function scrubHashes(serialized: object): object {
+  return JSON.parse(
+    JSON.stringify(serialized).replace(/scrypt\$1\$[A-Za-z0-9_$-]+/g, '[redacted]'),
+  ) as object;
+}
+
+export const errSerializer = (err: Error) => scrubHashes(stdSerializers.err(err));
+
 export const logger = pino({
   level: process.env['LOG_LEVEL'] ?? 'info',
+  serializers: { err: errSerializer },
   // No pid or hostname on every line; `null` is how pino spells that.
   base: null,
   redact: { ...REDACTION, paths: [...REDACTION.paths] },

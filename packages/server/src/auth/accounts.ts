@@ -35,7 +35,6 @@ export function accessPolicyFor(email: string): { state: 'pending' | 'active'; i
   const normalized = normalizeEmail(email);
   const domain = normalized.slice(normalized.indexOf('@'));
   const e = env();
-
   const isAdmin = e.ADMIN_EMAILS.map(normalizeEmail).includes(normalized);
   if (isAdmin) return { state: 'active', isAdmin: true };
 
@@ -159,7 +158,7 @@ export async function findOrCreateUser(
 export async function activateUser(
   actor: Actor | null,
   user: UserRow,
-  via: 'admin' | 'invitation' | 'open-signup',
+  via: 'admin' | 'invitation' | 'open-signup' | 'single-user',
 ): Promise<boolean> {
   if (user.state !== 'pending') return false;
 
@@ -174,9 +173,9 @@ export async function activateUser(
       .where(and(eq(schema.users.id, user.id), eq(schema.users.state, 'pending')))
       .returning();
 
-    // Open signup admits somebody who is signing in or using the app right now;
+    // Open signup and single-user mode admit somebody who is using the app right now;
     // an "you're approved" email would arrive after they are already in.
-    if (updated && via !== 'open-signup')
+    if (updated && via !== 'open-signup' && via !== 'single-user')
       mailJob = await enqueue(tx, 'email', { ...approvedMessage(updated.email) });
     return updated;
   });

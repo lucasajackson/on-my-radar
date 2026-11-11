@@ -28,7 +28,7 @@ import { emailOpen } from '../services/account-lifecycle.js';
  * narrow.
  */
 import { and, desc, eq, gt, inArray, isNull, sql } from 'drizzle-orm';
-import { LOGIN_CODE, normalizeEmail, WAITLIST } from '@onmyradar/contract';
+import { LOGIN_CODE, normalizeEmail, PASSWORD, WAITLIST } from '@onmyradar/contract';
 import { getDb, schema } from '../db/client.js';
 import { hashSecret, newLoginCode, safeEqual } from './crypto.js';
 
@@ -257,16 +257,52 @@ async function chargeVerify(
   };
 }
 
-/** Seconds until an address's verify lock lifts, or null when it is not locked. */
-async function verifyLockRemaining(email: string): Promise<number | null> {
+/** Seconds until a limit key's lock lifts, or null when it is not locked. */
+async function verifyLockRemaining(key: string): Promise<number | null> {
   const [row] = await getDb()
     .select({ lockedUntil: schema.loginVerifyLimits.lockedUntil })
     .from(schema.loginVerifyLimits)
-    .where(eq(schema.loginVerifyLimits.key, `address:${email}`))
+    .where(eq(schema.loginVerifyLimits.key, key))
     .limit(1);
   if (!row?.lockedUntil) return null;
   const ms = row.lockedUntil.getTime() - Date.now();
   return ms > 0 ? Math.ceil(ms / 1000) : null;
+}
+
+/**
+ * Password sign-in's ceilings, in the same table under their own `pw-net:` and `pw:`
+ * keys so they never spend the code limits, and codes still work while a password is
+ * locked. Charged BEFORE any scrypt runs and for any address, existing or not, so a
+ * refusal says nothing about whether there is an account. The address is charged as
+ * a failure up front, exactly, and `clearPasswordFailures` refunds it on a success.
+ */
+export async function chargePasswordAttempt(email: string, network: string | null): Promise<void> {
+  if (network) {
+    const byNetwork = await chargeVerify(`pw-net:${network}`, 3600, null);
+    if (byNetwork.count > PASSWORD.attemptsPerNetworkPerHour) {
+      throw new RateLimitedError(retryAfter(byNetwork.windowStartedAt), 'network');
+    }
+  }
+  // Increment first and admit on the count the increment returned: reading a lock and then
+  // charging lets concurrent guesses all pass the read. The window, not the refusals, ends a lock.
+  const charge = await chargeVerify(
+    `pw:${normalizeEmail(email)}`,
+    24 * 3600,
+    PASSWORD.failuresPerAddressPerDay,
+  );
+  if (charge.count > PASSWORD.failuresPerAddressPerDay) {
+    const remaining = Math.ceil(
+      (charge.windowStartedAt.getTime() + 24 * 3600_000 - Date.now()) / 1000,
+    );
+    throw new RateLimitedError(Math.min(24 * 3600, Math.max(1, remaining)), 'locked');
+  }
+}
+
+/** A sign-in that worked, or a reset by emailed code, ends the address's run of wrong passwords. */
+export async function clearPasswordFailures(email: string): Promise<void> {
+  await getDb()
+    .delete(schema.loginVerifyLimits)
+    .where(eq(schema.loginVerifyLimits.key, `pw:${normalizeEmail(email)}`));
 }
 
 export type VerifyResult =
@@ -293,7 +329,7 @@ export async function verifyLoginCode(
       throw new RateLimitedError(retryAfter(byNetwork.windowStartedAt), 'network');
     }
   }
-  const locked = await verifyLockRemaining(normalized);
+  const locked = await verifyLockRemaining(`address:${normalized}`);
   if (locked !== null) throw new RateLimitedError(locked, 'locked');
 
   const result = await compareLoginCode(normalized, code);

@@ -35,7 +35,7 @@ import {
 import { ApiError, api } from '../lib/api';
 import { applyTheme, type ThemePreference } from '../lib/theme';
 import { fullTime } from '../lib/format';
-import { queryKeys, useSession, useSignOut } from '../lib/session';
+import { queryKeys, useSession, useSignOut, useSingleUser } from '../lib/session';
 import { ConfirmDialog, Modal, Section, Spinner, notify } from '../components/primitives';
 import { NotificationSettings } from '../components/notification-settings';
 import { useDocumentTitle } from '../lib/title';
@@ -228,8 +228,93 @@ export function ProfileSettings() {
         </div>
       </Section>
 
+      <PasswordSection />
+
       <AccountActions />
     </div>
+  );
+}
+
+/**
+ * Set or change your password, where the instance has password sign-in on. The page does
+ * not know whether you have one: the first needs a code emailed to you, a change needs the
+ * current password, and the server's answer says which.
+ */
+function PasswordSection() {
+  const { data: config } = useQuery({
+    queryKey: queryKeys.authConfig,
+    queryFn: () => api.auth.config(),
+  });
+  const { user } = useSession();
+  const [password, setPassword] = useState('');
+  const [current, setCurrent] = useState('');
+  const [code, setCode] = useState('');
+  if (!config?.password?.enabled || !user) return null;
+
+  const emailCode = async () => {
+    try {
+      await api.auth.requestCode(user.email);
+      notify(`Code sent to ${user.email}`);
+    } catch (err) {
+      notify(err instanceof ApiError ? err.message : 'Could not send a code', 'error');
+    }
+  };
+  const save = async () => {
+    try {
+      await api.auth.setPassword({
+        password,
+        ...(current ? { currentPassword: current } : {}),
+        ...(code ? { code } : {}),
+      });
+      setPassword('');
+      setCurrent('');
+      setCode('');
+      notify('Password saved. Your other devices were signed out.');
+    } catch (err) {
+      notify(err instanceof ApiError ? err.message : 'Could not save your password', 'error');
+    }
+  };
+  return (
+    <Section title="Password">
+      <label className="flex flex-col gap-1.5">
+        <span className="instrument">New password</span>
+        <input
+          className="field"
+          type="password"
+          autoComplete="new-password"
+          value={password}
+          onChange={(event) => setPassword(event.target.value)}
+        />
+      </label>
+      <label className="flex flex-col gap-1.5">
+        <span className="instrument">Current password</span>
+        <input
+          className="field"
+          type="password"
+          autoComplete="current-password"
+          value={current}
+          onChange={(event) => setCurrent(event.target.value)}
+        />
+      </label>
+      <label className="flex flex-col gap-1.5">
+        <span className="instrument">Or the six-digit code we email you</span>
+        <input
+          className="field font-mono"
+          inputMode="numeric"
+          maxLength={6}
+          value={code}
+          onChange={(event) => setCode(event.target.value.replace(/\D/g, ''))}
+        />
+      </label>
+      <div className="flex flex-wrap gap-2">
+        <button className="btn btn-accent" disabled={!password} onClick={() => void save()}>
+          Save password
+        </button>
+        <button className="btn" onClick={() => void emailCode()}>
+          Email me a code
+        </button>
+      </div>
+    </Section>
   );
 }
 
@@ -237,6 +322,7 @@ export function ProfileSettings() {
 function AccountActions() {
   const { user } = useSession();
   const signOut = useSignOut();
+  const singleUser = useSingleUser();
   return (
     <Section title="Account">
       <div className="flex flex-wrap items-center gap-2">
@@ -246,10 +332,12 @@ function AccountActions() {
             Admin
           </Link>
         ) : null}
-        <button className="btn" onClick={() => void signOut()}>
-          <LogOut className="h-4 w-4" />
-          Sign out
-        </button>
+        {singleUser ? null : (
+          <button className="btn" onClick={() => void signOut()}>
+            <LogOut className="h-4 w-4" />
+            Sign out
+          </button>
+        )}
       </div>
     </Section>
   );

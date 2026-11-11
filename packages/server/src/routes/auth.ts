@@ -1,14 +1,18 @@
 /** Sign-in: magic-link codes over email, plus OIDC SSO. */
-import { Hono } from 'hono';
+import { Hono, type MiddlewareHandler } from 'hono';
 import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
 import {
   isBearerClient,
   LOGIN_CODE,
   normalizeEmail,
+  passwordLoginSchema,
+  passwordResetSchema,
   requestCodeSchema,
   safeNextPath,
+  setPasswordSchema,
   updateProfileSchema,
   verifyCodeSchema,
+  type SessionClient,
   type UserDto,
 } from '@onmyradar/contract';
 import {
@@ -19,7 +23,21 @@ import {
   touchLastSeen,
   type UserRow,
 } from '../auth/accounts.js';
-import { issueLoginCode, RateLimitedError, verifyLoginCode } from '../auth/codes.js';
+import {
+  chargePasswordAttempt,
+  clearPasswordFailures,
+  issueLoginCode,
+  RateLimitedError,
+  verifyLoginCode,
+} from '../auth/codes.js';
+import {
+  changePassword,
+  getPasswordHash,
+  rehashPassword,
+  savePassword,
+  verifyPassword,
+} from '../auth/password.js';
+import { singleUserAccount } from '../auth/single-user.js';
 import { randomToken, safeEqual, signFor } from '../auth/crypto.js';
 import {
   buildAuthorizationRequest,
@@ -31,7 +49,10 @@ import {
 import {
   clearSessionCookie,
   createSession,
+  PasswordChangedError,
   listSessions,
+  revokeOtherSessions,
+  revokeAllSessions,
   revokeSession,
   revokeSessionFor,
   setSessionCookie,
@@ -42,6 +63,7 @@ import {
   ApiError,
   badRequest,
   clientIp,
+  conflict,
   forbidden,
   notFound,
   readJson,
@@ -53,6 +75,7 @@ import {
 import { logger } from '../logger.js';
 import { loginCodeMessage, sendMail } from '../services/mail.js';
 import { networkOf } from '../services/public-request.js';
+import { emailOpen } from '../services/account-lifecycle.js';
 import { assertHumanDecision } from '../services/access.js';
 import { recordAudit } from '../services/audit.js';
 import { and, eq } from 'drizzle-orm';
@@ -84,6 +107,21 @@ function safeNext(next: string | undefined): string {
   return safeNextPath(next) ?? '/';
 }
 
+/**
+ * A sign-in method a deployment has switched off answers as if it were not there:
+ * single-user mode has one human and no sign-in step, and password sign-in is opt-in.
+ */
+const only =
+  (on: () => boolean): MiddlewareHandler<AppEnv> =>
+  async (_c, next) => {
+    if (!on()) throw notFound();
+    return next();
+  };
+const humans = only(() => !env().SINGLE_USER_EMAIL);
+const passwords = only(() => env().PASSWORD_LOGIN_ENABLED);
+for (const path of ['/request-code', '/verify-code', '/oidc/*']) authRoutes.use(path, humans);
+for (const path of ['/password', '/password/*']) authRoutes.use(path, passwords);
+
 /** What the login screen needs to render itself. */
 authRoutes.get('/config', async (c) => {
   const e = env();
@@ -91,12 +129,25 @@ authRoutes.get('/config', async (c) => {
   return c.json({
     email: { enabled: true, delivers: mailConfigured(e) },
     oidc: { enabled: Boolean(endpoints), name: e.OIDC_PROVIDER_NAME },
+    password: { enabled: e.PASSWORD_LOGIN_ENABLED },
+    singleUser: Boolean(e.SINGLE_USER_EMAIL),
   });
 });
 
-authRoutes.get('/session', (c) => {
+authRoutes.get('/session', async (c) => {
   const actor = c.get('actor');
-  if (!actor) return c.json({ user: null });
+  if (!actor) {
+    // Single-user mode signs in here and nowhere else; see `auth/single-user.ts`.
+    const account = await singleUserAccount(c);
+    if (!account) return c.json({ user: null });
+    await afterSignIn(account.user, account.created);
+    const { token } = await createSession(account.user, {
+      userAgent: c.req.header('user-agent') ?? null,
+      ip: clientIp(c),
+    });
+    setSessionCookie(c, token);
+    return c.json({ user: userDto(account.user) });
+  }
   void touchLastSeen(actor.user.id);
   return c.json({ user: userDto(actor.user) });
 });
@@ -182,76 +233,223 @@ authRoutes.post('/request-code', async (c) => {
   });
 });
 
-authRoutes.post('/verify-code', async (c) => {
-  const input = await readJson(c, verifyCodeSchema);
-  const browser = !(input.client && isBearerClient(input.client));
-  // Checked before the code, so a verification from the wrong browser burns
-  // none of the address's five attempts and says nothing about the code.
-  if (browser && !hasLoginChallenge(c, input.email)) {
+/**
+ * Spend a login code for an address: the browser's challenge cookie first, so a code
+ * entered in the wrong browser burns none of the address's attempts, then the code
+ * itself. Throws the refusal; returns when the code was right and is spent.
+ */
+async function redeemLoginCode(
+  c: Ctx,
+  input: { email: string; code: string; client?: SessionClient | undefined },
+): Promise<void> {
+  if (!isBearer(input.client) && !hasLoginChallenge(c, input.email)) {
     throw new ApiError(
       401,
       'login_challenge_missing',
       'Enter the code in the same browser you requested it from. Request a new code here if you need to.',
     );
   }
-  const verifyIp = clientIp(c);
-  let result;
-  try {
-    result = await verifyLoginCode(input.email, input.code, verifyIp ? networkOf(verifyIp) : null);
-  } catch (err) {
-    if (err instanceof RateLimitedError) {
-      throw tooManyRequests(
-        err.scope === 'network'
-          ? 'Too many sign-in attempts from your network. Try again later.'
-          : 'Too many incorrect codes for this address. Try again later.',
-        err.retryAfterSeconds,
-      );
-    }
-    throw err;
-  }
-
+  const result = await verifyCode(c, input.email, input.code);
   if (!result.ok) {
-    const message =
+    throw unauthorized(
       result.reason === 'too_many_attempts'
         ? 'Too many incorrect attempts. Request a new code.'
         : result.reason === 'not_found'
           ? 'That code has expired. Request a new one.'
-          : 'That code is not right.';
-    throw unauthorized(message);
+          : 'That code is not right.',
+    );
   }
+}
 
-  const existed = await findUserByEmail(input.email);
-  const { user, created } = await findOrCreateUser(input.email);
+const isBearer = (client: SessionClient | undefined) => Boolean(client && isBearerClient(client));
 
-  if (created) {
-    await recordAudit(null, 'user.signup', 'user', user.id, { via: 'email' });
+/** `verifyLoginCode` for this request's network, its rate-limit refusals as 429s. */
+async function verifyCode(c: Ctx, email: string, code: string) {
+  const ip = clientIp(c);
+  try {
+    return await verifyLoginCode(email, code, ip ? networkOf(ip) : null);
+  } catch (err) {
+    throw rateLimitRefusal(err, 'Too many incorrect codes for this address. Try again later.');
   }
-  await afterSignIn(user, created && !existed);
+}
 
-  const session = await createSession(user, {
-    userAgent: c.req.header('user-agent') ?? null,
-    ip: clientIp(c),
-    ...(input.client ? { client: input.client } : {}),
-    ...(input.label ? { label: input.label } : {}),
-  });
+/** A `RateLimitedError` as the 429 a person reads; anything else is passed on. */
+function rateLimitRefusal(err: unknown, lockedMessage: string): Error {
+  if (!(err instanceof RateLimitedError))
+    return err instanceof Error ? err : new Error(String(err));
+  return tooManyRequests(
+    err.scope === 'network'
+      ? 'Too many sign-in attempts from your network. Try again later.'
+      : lockedMessage,
+    err.retryAfterSeconds,
+  );
+}
 
-  // A browser gets a cookie and never sees the token. Any other client gets the
-  // token and never gets a cookie: handing a native or cross-origin client a
-  // `Set-Cookie` it cannot store, alongside a token it can, would leave two
-  // credentials for one session and no way to tell which one signed a request.
-  if (!browser) {
+/**
+ * Every successful sign-in ends here, whichever method it used. A browser gets a
+ * cookie and never sees the token. Any other client gets the token and never gets a
+ * cookie: handing a native or cross-origin client a `Set-Cookie` it cannot store,
+ * alongside a token it can, would leave two credentials for one session and no way
+ * to tell which one signed a request.
+ */
+async function finishSignIn(
+  c: Ctx,
+  user: UserRow,
+  input: {
+    created: boolean;
+    client?: SessionClient | undefined;
+    label?: string | null | undefined;
+    next?: string | undefined;
+    /** The hash a password sign-in verified; the session is refused if it has changed since. */
+    passwordHash?: string;
+  },
+): Promise<Response> {
+  await afterSignIn(user, input.created);
+  let session;
+  try {
+    session = await createSession(user, {
+      userAgent: c.req.header('user-agent') ?? null,
+      ip: clientIp(c),
+      ...(input.client ? { client: input.client } : {}),
+      ...(input.label ? { label: input.label } : {}),
+      ...(input.passwordHash ? { passwordHash: input.passwordHash } : {}),
+    });
+  } catch (err) {
+    if (err instanceof PasswordChangedError) throw unauthorized(MISS);
+    throw err;
+  }
+  const next = safeNext(input.next);
+  if (isBearer(input.client)) {
     return c.json({
       user: userDto(user),
-      next: safeNext(input.next),
+      next,
       session: { token: session.token, expiresAt: session.expiresAt.toISOString() },
     });
   }
-
   // Spent: cleared before the session is set, so the session's `Set-Cookie`
   // is the last one a simple client reads.
   deleteCookie(c, LOGIN_CHALLENGE_COOKIE, { path: '/' });
   setSessionCookie(c, session.token);
-  return c.json({ user: userDto(user), next: safeNext(input.next) });
+  return c.json({ user: userDto(user), next });
+}
+
+authRoutes.post('/verify-code', async (c) => {
+  const input = await readJson(c, verifyCodeSchema);
+  await redeemLoginCode(c, input);
+
+  const existed = await findUserByEmail(input.email);
+  const { user, created } = await findOrCreateUser(input.email);
+  if (created) {
+    await recordAudit(null, 'user.signup', 'user', user.id, { via: 'email' });
+  }
+  return finishSignIn(c, user, { ...input, created: created && !existed });
+});
+
+/* -------------------------------- passwords ------------------------------- */
+
+const MISS = 'Email or password is not right.';
+
+/**
+ * Four ways to get it wrong and one answer for all of them: no such address, an
+ * address with no password, a wrong password and a closed account. Each costs
+ * the limits and exactly one scrypt (`verifyPassword` runs one for a missing hash),
+ * so neither the words nor the timing say which. Never creates an account.
+ */
+authRoutes.post('/password/login', async (c) => {
+  const input = await readJson(c, passwordLoginSchema);
+  const ip = clientIp(c);
+  try {
+    await chargePasswordAttempt(input.email, ip ? networkOf(ip) : null);
+  } catch (err) {
+    throw rateLimitRefusal(err, 'Too many incorrect passwords for this address. Try again later.');
+  }
+
+  const user = (await emailOpen(input.email)) ? await findUserByEmail(input.email) : null;
+  const stored = user ? await getPasswordHash(user.id) : null;
+  const result = await verifyPassword(input.password, stored);
+  if (!user || !result.ok) throw unauthorized(MISS);
+
+  let verified = stored;
+  if (result.needsRehash && stored) {
+    verified = await rehashPassword(user.id, stored, input.password);
+    if (!verified) throw unauthorized(MISS);
+  }
+  await clearPasswordFailures(input.email);
+  return finishSignIn(c, user, {
+    ...input,
+    created: false,
+    ...(verified ? { passwordHash: verified } : {}),
+  });
+});
+
+/** A password is anything long enough that is not the address itself. */
+function assertUsablePassword(email: string, password: string): void {
+  if (password.toLowerCase() === normalizeEmail(email))
+    throw badRequest('Your password cannot be your email address.');
+}
+
+/** Forgot password: an emailed code proves the mailbox, then sets the new password and ends every session. */
+authRoutes.post('/password/reset', async (c) => {
+  const input = await readJson(c, passwordResetSchema);
+  assertUsablePassword(input.email, input.password);
+  await redeemLoginCode(c, input);
+
+  const user = await findUserByEmail(input.email);
+  if (!user)
+    throw unauthorized('There is no account for that address. Sign in with a code to create one.');
+  await savePassword(user.id, input.password);
+  await revokeAllSessions(user.id);
+  await clearPasswordFailures(input.email);
+  return finishSignIn(c, user, { ...input, created: false });
+});
+
+/**
+ * Change your password with the current one, or set the first with a code emailed to
+ * you. A session only (never a token), and it ends your other sessions.
+ */
+authRoutes.put('/password', async (c) => {
+  const actor = c.get('actor');
+  if (!actor) throw unauthorized();
+  assertHumanDecision(actor, 'Your password must be set by you.');
+  if (actor.user.state === 'suspended') throw forbidden('This account has been suspended.');
+  const input = await readJson(c, setPasswordSchema);
+  assertUsablePassword(actor.user.email, input.password);
+
+  // The proof is a fresh emailed code or, for somebody who has a password, the current one.
+  const stored = await getPasswordHash(actor.user.id);
+  if (input.code) {
+    const result = await verifyCode(c, actor.user.email, input.code);
+    if (!result.ok) throw unauthorized('That code is not right or has expired.');
+  } else if (stored && input.currentPassword) {
+    const ip = clientIp(c);
+    try {
+      await chargePasswordAttempt(actor.user.email, ip ? networkOf(ip) : null);
+    } catch (err) {
+      throw rateLimitRefusal(
+        err,
+        'Too many incorrect passwords for this address. Try again later.',
+      );
+    }
+    if (!(await verifyPassword(input.currentPassword, stored)).ok)
+      throw unauthorized('Your current password is not right.');
+  } else {
+    throw badRequest(
+      stored
+        ? 'Enter your current password or the code we emailed you.'
+        : 'Enter the code we emailed you.',
+    );
+  }
+  // Only if nothing moved while the proof was being checked: the hash is still the one it was
+  // checked against and this session still exists. A request that paused after verifying cannot
+  // overwrite a recovery that completed in the meantime.
+  if (
+    !actor.sessionId ||
+    !(await changePassword(actor.user.id, actor.sessionId, stored, input.password))
+  )
+    throw conflict('Your password or sessions changed while this was in progress. Sign in again.');
+  await revokeOtherSessions(actor.user.id, actor.sessionId);
+  await clearPasswordFailures(actor.user.email);
+  return c.json({ ok: true });
 });
 
 /**

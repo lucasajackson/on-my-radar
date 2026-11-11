@@ -14,6 +14,7 @@ import {
   DECISIONS,
   SESSION_CLIENTS,
   NOTIFICATIONS,
+  PASSWORD,
   RADAR_ACCENT_KEYS,
   RADAR_GLYPH_KEYS,
   RADAR_NOTIFY_LEVELS,
@@ -132,6 +133,40 @@ export const verifyCodeSchema = z.object({
   client: z.enum(SESSION_CLIENTS).optional(),
   /** A device name for the sessions list. Only meaningful with `client`. */
   label: optionalText(120),
+});
+
+/** A new password: length only. A breached-password list would need an outbound fetch. */
+export const passwordSchema = z
+  .string()
+  .min(PASSWORD.minLength, `Use at least ${PASSWORD.minLength} characters`)
+  .max(PASSWORD.maxLength);
+
+const signInClientFields = {
+  next: z.string().max(512).optional(),
+  client: z.enum(SESSION_CLIENTS).optional(),
+  label: optionalText(120),
+};
+
+export const passwordLoginSchema = z.object({
+  email: emailSchema,
+  // Not `passwordSchema`: a too-short guess is a wrong password, not a 400.
+  password: z.string().min(1).max(PASSWORD.maxLength),
+  ...signInClientFields,
+});
+
+/** Forgot password: the emailed code proves the mailbox, then sets a new password. */
+export const passwordResetSchema = z.object({
+  email: emailSchema,
+  code: verifyCodeSchema.shape.code,
+  password: passwordSchema,
+  ...signInClientFields,
+});
+
+/** Change a password with the current one, or set the first one with an emailed code. */
+export const setPasswordSchema = z.object({
+  password: passwordSchema,
+  currentPassword: z.string().min(1).max(PASSWORD.maxLength).optional(),
+  code: verifyCodeSchema.shape.code.optional(),
 });
 
 export const updateProfileSchema = z.object({
@@ -1128,6 +1163,7 @@ export type UpdateWebhookInput = z.infer<typeof updateWebhookSchema>;
 export type TemplateConfigInput = z.infer<typeof templateConfigSchema>;
 export type RadarThemeInput = z.infer<typeof radarThemeSchema>;
 export type VerifyCodeInput = z.infer<typeof verifyCodeSchema>;
+export type SetPasswordInput = z.infer<typeof setPasswordSchema>;
 export type CreateTopicInput = z.infer<typeof createTopicSchema>;
 export type UpdateTopicInput = z.infer<typeof updateTopicSchema>;
 export type ShareTopicInput = z.infer<typeof shareTopicSchema>;

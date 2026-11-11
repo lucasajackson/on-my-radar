@@ -283,6 +283,10 @@ export async function resolveInvite(token: string): Promise<InvitePreviewDto | n
  * stored credential acting as its creator, with nobody present at all.
  */
 export function assertMayInvite(actor: Actor): void {
+  // Single-user mode has one human and no way for anyone else to sign in, so an
+  // invitation to a new address would be a promise nobody can accept.
+  if (env().SINGLE_USER_EMAIL)
+    throw forbidden('This instance has one user, so there is nobody new to invite.');
   if (actor.kind === 'user') return;
   throw forbidden(
     'That address does not have an On My Radar account, and inviting somebody new ' +

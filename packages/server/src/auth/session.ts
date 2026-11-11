@@ -1,6 +1,6 @@
 import { sql } from 'drizzle-orm';
 /** Session issue / resolve / revoke, and the cookie that carries one. */
-import { and, desc, eq, gt } from 'drizzle-orm';
+import { and, desc, eq, gt, ne } from 'drizzle-orm';
 import type { Context } from 'hono';
 import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
 import { SESSION_TTL_DAYS, type SessionClient } from '@onmyradar/contract';
@@ -29,6 +29,9 @@ export interface IssuedSession {
   expiresAt: Date;
 }
 
+/** A password sign-in whose password was changed or reset before its session could be issued. */
+export class PasswordChangedError extends Error {}
+
 export async function createSession(
   user: UserRow,
   meta: {
@@ -36,13 +39,33 @@ export async function createSession(
     ip?: string | null;
     client?: SessionClient;
     label?: string | null;
+    /**
+     * The hash a password sign-in verified. The session is issued only if that is still the
+     * user's hash: the row is held `FOR SHARE` through the insert, so a password change (which
+     * updates the row, then revokes sessions) either runs after this session exists and revokes
+     * it, or runs first and this throws. Without it a login that paused after verifying could
+     * outlive the change that was meant to end it.
+     */
+    passwordHash?: string;
   } = {},
 ): Promise<IssuedSession> {
   const token = newSessionToken();
   const expiresAt = new Date(Date.now() + SESSION_TTL_DAYS * 24 * 60 * 60 * 1000);
-  await getDb()
-    .insert(schema.sessions)
-    .values({
+  await getDb().transaction(async (tx) => {
+    if (meta.passwordHash) {
+      const [current] = await tx
+        .select({ hash: schema.userPasswords.hash })
+        .from(schema.userPasswords)
+        .where(
+          and(
+            eq(schema.userPasswords.userId, user.id),
+            eq(schema.userPasswords.hash, meta.passwordHash),
+          ),
+        )
+        .for('share');
+      if (!current) throw new PasswordChangedError();
+    }
+    await tx.insert(schema.sessions).values({
       userId: user.id,
       tokenHash: hashSecret(token),
       userAgent: meta.userAgent?.slice(0, 400) ?? null,
@@ -51,6 +74,7 @@ export async function createSession(
       label: meta.label?.slice(0, 120) ?? null,
       expiresAt,
     });
+  });
   return { token, expiresAt };
 }
 
@@ -152,6 +176,13 @@ export async function revokeSession(sessionId: string): Promise<void> {
 
 export async function revokeAllSessions(userId: string): Promise<void> {
   await getDb().delete(schema.sessions).where(eq(schema.sessions.userId, userId));
+}
+
+/** Every session of a person but the one making the request: a changed password ends the rest. */
+export async function revokeOtherSessions(userId: string, keepSessionId: string): Promise<void> {
+  await getDb()
+    .delete(schema.sessions)
+    .where(and(eq(schema.sessions.userId, userId), ne(schema.sessions.id, keepSessionId)));
 }
 
 export function setSessionCookie(c: Context, token: string): void {

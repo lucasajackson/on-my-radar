@@ -43,7 +43,7 @@ import { REFRESH_TOKEN_TTL_MS } from '../auth/lifetimes.js';
 import { hashSecret, randomToken, verifyPkce } from '../auth/crypto.js';
 import { type Db, getDb, schema } from '../db/client.js';
 import { env } from '../env.js';
-import { badRequest, readJson, requireUser, type AppEnv } from '../http.js';
+import { badRequest, forbidden, readJson, requireUser, type AppEnv } from '../http.js';
 import type { Context } from 'hono';
 import { logger } from '../logger.js';
 import { agentDto, listAgents, requireOwnLiveAgent } from '../services/agents.js';
@@ -289,6 +289,17 @@ const decisionSchema = authorizeQuerySchema.extend({
  */
 oauthRoutes.post('/authorize/decision', async (c) => {
   const actor = requireUser(c);
+  // Single-user mode signs in whatever asks, so consent is what keeps a token from being minted
+  // by a bare API call: it must come from our own page. A browser says so with Sec-Fetch-Site, or,
+  // on a plain-http LAN origin where browsers send no Fetch Metadata, with our own Origin. A script
+  // can forge either; this is the best a server can do (a local process is the owner in this mode).
+  if (env().SINGLE_USER_EMAIL) {
+    const site = c.req.header('sec-fetch-site');
+    const ours =
+      site === 'same-origin' ||
+      (site === undefined && c.req.header('origin') === new URL(env().APP_URL).origin);
+    if (!ours) throw forbidden('Approve this connection from the On My Radar screen.');
+  }
   const input = await readJson(c, decisionSchema);
 
   const client = await loadClient(input.client_id);

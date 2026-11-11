@@ -187,3 +187,52 @@ it('says plainly when a code was requested in another browser, and sends a new o
     vi.restoreAllMocks();
   }
 });
+
+it('asks for a password when the instance has them, and offers a code instead', async () => {
+  Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
+  vi.spyOn(api.auth, 'config').mockResolvedValue({
+    email: { enabled: true, delivers: true },
+    oidc: { enabled: false, name: 'SSO' },
+    password: { enabled: true },
+  });
+  const signIn = vi
+    .spyOn(api.auth, 'passwordLogin')
+    .mockRejectedValue(new ApiError(401, 'unauthorized', 'Email or password is not right.'));
+  const host = document.createElement('div');
+  document.body.append(host);
+  const root = createRoot(host);
+  try {
+    await act(async () =>
+      root.render(
+        <QueryClientProvider client={new QueryClient()}>
+          <LoginRoute />
+        </QueryClientProvider>,
+      ),
+    );
+    const fill = async (selector: string, value: string) => {
+      const field = must(host.querySelector<HTMLInputElement>(selector));
+      await act(async () => {
+        setNativeValue(field, value);
+        field.dispatchEvent(new Event('input', { bubbles: true }));
+      });
+    };
+    await fill('input[type=email]', 'ada@example.com');
+    await fill('input[type=password]', 'a long enough password');
+    await act(async () => must(host.querySelector<HTMLButtonElement>('form button')).click());
+    expect(signIn).toHaveBeenCalledWith('ada@example.com', 'a long enough password', '/');
+    expect(must(host.querySelector('[role=alert]')).textContent).toBe(
+      'Email or password is not right.',
+    );
+    expect(host.textContent).toContain('Forgot password');
+    const other = [...host.querySelectorAll('button')].find((b) =>
+      b.textContent.includes('Email me a code instead'),
+    );
+    await act(async () => must(other).click());
+    expect(host.querySelector('input[type=password]')).toBeNull();
+    expect(host.textContent).toContain('Send me a code');
+  } finally {
+    await act(async () => root.unmount());
+    host.remove();
+    vi.restoreAllMocks();
+  }
+});

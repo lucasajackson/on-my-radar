@@ -111,6 +111,10 @@ async function handleMcp(c: Context<McpEnv>) {
   // because an MCP server built for it would list every radar its owner has.
   if (!actor || actor.kind === 'integration' || actor.kind === 'guest')
     return unauthorizedResponse(c);
+  // Single-user mode signs the browser in without asking, so a session proves nothing about
+  // who is calling: any page that reaches this port has one, and it is a plain string a
+  // process can send as a cookie or as a bearer token. Agents bring a PAT or an OAuth token.
+  if (env().SINGLE_USER_EMAIL && actor.kind === 'user') return unauthorizedResponse(c);
   if (actor.user.state !== 'active') {
     return c.json(
       {

@@ -155,7 +155,7 @@ export type Ctx = Context<AppEnv>;
 
 export class ApiError extends HTTPException {
   constructor(
-    status: 400 | 401 | 403 | 404 | 409 | 410 | 413 | 415 | 422 | 429 | 500 | 502 | 503,
+    status: 400 | 401 | 403 | 404 | 409 | 410 | 413 | 415 | 421 | 422 | 429 | 500 | 502 | 503,
     public readonly code: string,
     message: string,
     public readonly fields?: Record<string, string>,

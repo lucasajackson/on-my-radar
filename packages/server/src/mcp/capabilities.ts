@@ -218,6 +218,21 @@ export const endpointCoverage: Array<{ route: string; tool?: string; reason?: st
       'Session, login and account identity controls belong to the signed-in person; MCP authenticates through OAuth or a personal token.',
   },
   {
+    route: 'auth:authRoutes.post /password/login',
+    reason:
+      'Session, login and account identity controls belong to the signed-in person; MCP authenticates through OAuth or a personal token.',
+  },
+  {
+    route: 'auth:authRoutes.post /password/reset',
+    reason:
+      'Session, login and account identity controls belong to the signed-in person; MCP authenticates through OAuth or a personal token.',
+  },
+  {
+    route: 'auth:authRoutes.put /password',
+    reason:
+      'Session, login and account identity controls belong to the signed-in person; MCP authenticates through OAuth or a personal token.',
+  },
+  {
     route: 'auth:authRoutes.get /sessions',
     reason:
       'Session, login and account identity controls belong to the signed-in person; MCP authenticates through OAuth or a personal token.',

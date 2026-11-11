@@ -189,6 +189,12 @@ export function useSignOut(): () => Promise<void> {
   };
 }
 
+/** True on a single-user instance, where there is nobody to sign out as and nowhere to sign in. */
+export function useSingleUser(): boolean {
+  const { data } = useQuery({ queryKey: queryKeys.authConfig, queryFn: () => api.auth.config() });
+  return data?.singleUser === true;
+}
+
 export function useRadars(enabled = true): UseQueryResult<{ radars: RadarDto[] }> {
   return useQuery({
     queryKey: queryKeys.radars,
