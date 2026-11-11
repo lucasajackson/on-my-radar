@@ -1,0 +1,67 @@
+# Self-host On My Radar on one machine: app, worker and Postgres.
+#
+#   export SESSION_SECRET=$(openssl rand -hex 32)
+#   docker compose up --build        # then open http://localhost:3500
+#
+# No mail account needed: sign-in codes are emailed to a bundled Mailpit inbox,
+# which you read at http://localhost:8025. Keep the ports on localhost. For a real
+# deployment point MAIL_PROVIDER at resend or your own smtp, set PUBLIC_URL to your
+# public address and put TLS in front. Every variable is documented in .env.example.
+#
+# Attachments are off until you add S3_ENDPOINT, S3_ACCESS_KEY and S3_SECRET_KEY
+# (and S3_BUCKET) under `environment:` for any S3-compatible store. Object storage
+# is not bundled: MinIO no longer publishes public images.
+x-app: &app
+  build:
+    context: .
+    target: runtime
+    # Agent setup (/agent-setup/) is stamped with this address at build time.
+    args:
+      OMR_PUBLIC_URL: ${PUBLIC_URL:-http://localhost:3500}
+  image: onmyradar:local
+  restart: unless-stopped
+  depends_on:
+    postgres: { condition: service_healthy }
+  environment:
+    NODE_ENV: production
+    MAIL_PROVIDER: smtp
+    SMTP_URL: smtp://mailpit:1025?tls=none
+    PUBLIC_URL: ${PUBLIC_URL:-http://localhost:3500}
+    DATABASE_URL: postgres://onmyradar:${POSTGRES_PASSWORD:-onmyradar}@postgres:5432/onmyradar
+    SESSION_SECRET: ${SESSION_SECRET:?set SESSION_SECRET, e.g. export SESSION_SECRET=$(openssl rand -hex 32)}
+    MIGRATE_ON_BOOT: '1'
+    # Addresses listed here (comma-separated) skip the waitlist and get the admin screen.
+    ADMIN_EMAILS: ${ADMIN_EMAILS:-}
+    SIGNUP_MODE: ${SIGNUP_MODE:-open}
+
+services:
+  app:
+    <<: *app
+    ports: ['127.0.0.1:3500:3500']
+
+  # The outbox: mail, notifications, webhooks, feeds. Same image, different entrypoint.
+  worker:
+    <<: *app
+    command: ['node', 'packages/server/dist/worker.js']
+
+  # Catches every email the app sends. Not for production.
+  mailpit:
+    image: axllent/mailpit:v1.29
+    restart: unless-stopped
+    ports: ['127.0.0.1:8025:8025']
+
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: onmyradar
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-onmyradar}
+      POSTGRES_DB: onmyradar
+    volumes: ['pgdata:/var/lib/postgresql/data']
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U onmyradar -d onmyradar']
+      interval: 5s
+      retries: 10
+
+volumes:
+  pgdata:

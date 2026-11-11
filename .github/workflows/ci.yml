@@ -1,0 +1,59 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: onmyradar
+          POSTGRES_USER: onmyradar
+          POSTGRES_PASSWORD: onmyradar
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U onmyradar"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+      # A real SMTP server for the SMTP mail provider's tests (services/mail-smtp.test.ts).
+      mailpit:
+        image: axllent/mailpit:v1.29
+        ports: ['1025:1025', '8025:8025']
+    env:
+      MAILPIT_SMTP: localhost:1025
+      MAILPIT_API: http://localhost:8025
+      DATABASE_URL: postgres://onmyradar:onmyradar@localhost:5432/onmyradar
+      SESSION_SECRET: ci-only-session-secret-not-used-anywhere-else
+      # Type-aware lint over the whole workspace needs more than Node's default heap.
+      NODE_OPTIONS: --max-old-space-size=6144
+      # A hosted runner has fewer cores than the suites assume; fewer Postgres workers, longer waits.
+      VITEST_MAX_WORKERS: '2'
+      VITEST_TEST_TIMEOUT: '30000'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4 # the version comes from "packageManager"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: node --test scripts/*.test.mjs
+      # The server and UI resolve the contract's dist, so it builds first.
+      - run: pnpm --filter @onmyradar/contract build
+      - run: pnpm lint
+      - run: pnpm typecheck
+      - run: pnpm format:check
+      - run: pnpm test
+      - run: pnpm build
+      # Every migration on an empty database, twice: the second run must be a no-op.
+      - run: pnpm migrate
+      - run: pnpm migrate

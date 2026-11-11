@@ -1,0 +1,2 @@
+# A run's evidence (fixtures hold plaintext tokens for a throwaway database).
+.out/

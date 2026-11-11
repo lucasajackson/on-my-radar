@@ -1,0 +1,51 @@
+{
+  "name": "onmyradar",
+  "private": true,
+  "version": "0.1.0",
+  "description": "On My Radar \u2014 capture blips, sort your shit out",
+  "type": "module",
+  "packageManager": "pnpm@9.15.0",
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "pnpm": {
+    "overrides": {
+      "miniflare@5.20260918.0-alpha>sharp": "0.35.5",
+      "dompurify": "3.4.17",
+      "body-parser": "2.4.0",
+      "seroval": "1.6.11",
+      "seroval-plugins": "1.6.11",
+      "mailauth>undici": "8.12.2",
+      "fast-uri": "3.1.9",
+      "ip-address": "10.7.5",
+      "mailauth>nodemailer": "10.1.4",
+      "mailauth>joi": "18.3.1",
+      "qs": "6.16.1"
+    },
+    "auditConfig": {
+      "ignoreGhsas": [
+        "GHSA-mrhx-c7xc-m3w5"
+      ]
+    }
+  },
+  "scripts": {
+    "dev": "pnpm -r --parallel --filter @onmyradar/server --filter @onmyradar/ui dev",
+    "build": "pnpm --filter @onmyradar/contract build && pnpm --filter @onmyradar/server build && pnpm --filter @onmyradar/ui build",
+    "typecheck": "pnpm -r typecheck",
+    "test": "pnpm -r test",
+    "migrate": "pnpm --filter @onmyradar/server migrate",
+    "phone": "pnpm build && pnpm --filter @onmyradar/phone start",
+    "lint": "eslint packages agent-setup scripts/omr-agent.test.mjs --max-warnings=0",
+    "lint:fix": "eslint packages agent-setup scripts/omr-agent.test.mjs --fix",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.5",
+    "eslint": "9",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "globals": "^17.11.0",
+    "prettier": "^3.9.6",
+    "typescript-eslint": "8"
+  }
+}

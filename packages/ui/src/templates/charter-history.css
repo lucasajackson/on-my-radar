@@ -1,0 +1,329 @@
+/*
+  The charter's history (plan e715ea20, U3): the panel of versions, the banner over a version or a
+  comparison, and the marks on the document. In @layer components like the rest of the app.
+*/
+@layer components {
+  .chist-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+  .chist-row {
+    display: flex;
+    align-items: stretch;
+    gap: 0.25rem;
+    border: 1px solid transparent;
+    border-radius: 10px;
+  }
+  .chist-row:hover {
+    background: var(--ink-800);
+  }
+  .chist-row.is-selected {
+    border-color: color-mix(in srgb, var(--accent-from) 55%, var(--line));
+    background: color-mix(in srgb, var(--accent-from) 9%, transparent);
+  }
+  .chist-row.is-current {
+    margin-bottom: 0.4rem;
+  }
+  .chist-main {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: 0.2rem;
+    min-width: 0;
+    min-height: 2.75rem;
+    padding: 0.55rem 0.65rem;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    text-align: left;
+    cursor: pointer;
+    border-radius: 10px;
+  }
+  .chist-title {
+    display: flex;
+    align-items: baseline;
+    gap: 0.5rem;
+    min-width: 0;
+  }
+  .chist-v {
+    flex-shrink: 0;
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    color: var(--paper-faint);
+  }
+  .chist-why {
+    font-size: 0.9375rem;
+    font-weight: 600;
+    overflow-wrap: anywhere;
+  }
+  .chist-meta {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.2rem 0.5rem;
+    font-size: 0.8125rem;
+    color: var(--paper-dim);
+  }
+  .chist-ago {
+    color: var(--paper-faint);
+  }
+  .chist-ago::before {
+    content: '· ';
+  }
+  .chist-compare {
+    align-self: center;
+    flex-shrink: 0;
+    min-height: 2.25rem;
+    padding-inline: 0.55rem;
+    color: var(--paper-dim);
+  }
+  .chist-more {
+    align-self: flex-start;
+    margin-top: 0.75rem;
+  }
+  .chist-foot {
+    margin: 0;
+    margin-right: auto;
+  }
+  .chist-failed {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.5rem;
+    padding: 0.75rem 1rem;
+    border: 1px solid color-mix(in srgb, var(--warn) 60%, transparent);
+    border-radius: 12px;
+  }
+  .chist-failed p {
+    margin: 0;
+  }
+  .chist-empty {
+    margin: 0;
+    padding: 1rem;
+    color: var(--paper-dim);
+    font-style: italic;
+  }
+  .chip-status.is-agent {
+    color: var(--accent-from);
+    font-size: 0.6875rem;
+    padding-block: 0;
+  }
+  .chist-confirm-note {
+    margin-top: 0.6rem;
+  }
+
+  /* Over a version, in the document's place. */
+  .chist-banner {
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+    margin-bottom: 1rem;
+    padding: 0.75rem 1rem;
+    border: 1px solid color-mix(in srgb, var(--accent) 50%, transparent);
+    border-left-width: 4px;
+    border-radius: 12px;
+    background: color-mix(in srgb, var(--accent) 8%, var(--ink-850));
+  }
+  .chist-banner.is-problem {
+    border-color: color-mix(in srgb, var(--warn) 60%, transparent);
+    background: color-mix(in srgb, var(--warn) 10%, var(--ink-850));
+  }
+  .chist-banner-line {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.2rem 0.4rem;
+    margin: 0;
+    font-size: 0.9375rem;
+    min-width: 0;
+  }
+  .chist-banner-meta,
+  .chist-banner-why {
+    color: var(--paper-dim);
+  }
+  .chist-banner-meta::before,
+  .chist-banner-why::before {
+    content: '· ';
+  }
+  @media (max-width: 479px) {
+    /* Each part on its own line: the dots would be left hanging at the start of one. */
+    .chist-banner-meta::before,
+    .chist-banner-why::before {
+      content: none;
+    }
+    .chist-banner-meta,
+    .chist-banner-why {
+      flex-basis: 100%;
+    }
+  }
+  .chist-banner-note {
+    margin: 0;
+    font-size: 0.8125rem;
+    color: var(--paper-dim);
+  }
+  .chist-actions,
+  .chist-compare-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
+  }
+  .chist-compare-row {
+    gap: 0.5rem 0.9rem;
+  }
+  .chist-pick {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+  }
+  /*
+    The changes bar of a comparison keeps its place under the card's bar while the document
+    scrolls, so the next change and the way out are always in reach. On a phone it sits under the
+    tabs, which are the only thing that sticks there.
+  */
+  .chist-nav {
+    position: sticky;
+    top: calc(var(--radar-header-h, 6.25rem) + 3.95rem);
+    z-index: 4;
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    margin: 0 0 1rem;
+    padding: 0.35rem 0.6rem;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    background: var(--ink-800);
+    box-shadow: 0 6px 14px #0004;
+  }
+  /* Which versions, and which change: two short lines on a phone, one line beside each other. */
+  .chist-where {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0 0.75rem;
+  }
+  .chist-pair {
+    white-space: nowrap;
+    color: var(--paper-dim);
+  }
+  .chist-count {
+    font-size: 0.875rem;
+    font-variant-numeric: tabular-nums;
+  }
+  .chist-step {
+    min-height: 2.25rem;
+    padding-inline: 0.5rem;
+  }
+  .chist-exit {
+    min-height: 2.25rem;
+    white-space: nowrap;
+  }
+  @media (min-width: 1024px) {
+    .chist-nav,
+    .chist-banner.is-viewing {
+      top: calc(var(--radar-header-h, 6.25rem) + var(--arch-bar, 3.75rem) + 0.25rem);
+    }
+    /* A version being read keeps its banner in view: what it is, and the way back. */
+    .chist-banner.is-viewing {
+      position: sticky;
+      z-index: 4;
+      box-shadow: 0 6px 14px #0004;
+    }
+  }
+  @media (max-width: 1023px) {
+    .chist-step,
+    .chist-exit,
+    .chist-actions .btn {
+      min-height: 2.75rem;
+    }
+  }
+  @media (max-width: 479px) {
+    .chist-where {
+      flex-direction: column;
+      gap: 0;
+    }
+    .chist-step-text {
+      display: none;
+    }
+    .chist-actions .btn {
+      flex: 1 1 auto;
+    }
+  }
+
+  /* The version itself: the editor's page with nothing to type into. */
+  .chist-doc {
+    min-width: 0;
+  }
+  .chist-doc-body.md-doc {
+    max-width: none;
+  }
+  .chist-doc-body .ProseMirror {
+    outline: none;
+  }
+  .chist-doc-body :is(h1, h2, h3, h4, h5, h6) {
+    scroll-margin-top: calc(var(--radar-header-h, 6.25rem) + var(--arch-bar, 0px) + 9rem);
+  }
+  .chist-doc-body table {
+    display: block;
+    max-width: 100%;
+    overflow-x: auto;
+  }
+  /* The reading view's columns: a readable width, and the box scrolls rather than five slivers. */
+  .chist-doc-body :is(th, td) {
+    min-width: 8rem;
+    vertical-align: top;
+  }
+  .diff-ins {
+    border-radius: 3px;
+    background: color-mix(in srgb, var(--ok) 20%, transparent);
+    text-decoration: underline;
+    text-decoration-color: color-mix(in srgb, var(--ok) 70%, transparent);
+    text-underline-offset: 3px;
+    scroll-margin-top: calc(var(--radar-header-h, 6.25rem) + var(--arch-bar, 0px) + 9rem);
+  }
+  .diff-del {
+    margin: 0;
+    padding: 0 0.1em;
+    border-radius: 3px;
+    background: color-mix(in srgb, var(--danger) 18%, transparent);
+    color: var(--danger);
+    text-decoration: line-through;
+    text-decoration-thickness: 1.5px;
+    scroll-margin-top: calc(var(--radar-header-h, 6.25rem) + var(--arch-bar, 0px) + 9rem);
+  }
+  .diff-ins.is-current {
+    background: color-mix(in srgb, var(--ok) 38%, transparent);
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--ok) 70%, transparent);
+  }
+  .diff-del.is-current {
+    background: color-mix(in srgb, var(--danger) 34%, transparent);
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--danger) 70%, transparent);
+  }
+  .charter-flash {
+    border-radius: 3px;
+    background: color-mix(in srgb, var(--warn) 28%, transparent);
+    scroll-margin-top: calc(var(--radar-header-h, 6.25rem) + var(--arch-bar, 0px) + 9rem);
+    animation: charter-flash 2.4s ease-out 2;
+  }
+  @keyframes charter-flash {
+    0%,
+    100% {
+      background: color-mix(in srgb, var(--warn) 28%, transparent);
+    }
+    30% {
+      background: color-mix(in srgb, var(--warn) 70%, transparent);
+      box-shadow: 0 0 0 4px color-mix(in srgb, var(--warn) 45%, transparent);
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .charter-flash {
+      animation: none;
+    }
+  }
+}

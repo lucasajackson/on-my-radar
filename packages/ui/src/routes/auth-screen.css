@@ -1,0 +1,31 @@
+/*
+  The two screens a person sees before they are in: /login and the waiting room.
+
+  They are the step after the marketing site, so they wear it exactly: dark
+  whatever the device prefers (see `useDarkScreen`), Encode Sans Expanded at a
+  light weight for headings, Geist for everything else and Geist Mono for the
+  instrument voice. The font tokens are redefined on the screen's root rather
+  than the family set on it, so buttons, fields and labels — which ask for
+  `--font-sans` and `--font-mono` themselves — follow too. Only these two:
+  inside, the app's own pairing is the identity.
+
+  Imported by those two routes only, so the font files land in their chunks'
+  CSS and never on the app's entry.
+*/
+@import '@fontsource/encode-sans-expanded/300.css';
+@import '@fontsource-variable/geist/wght.css';
+@import '@fontsource-variable/geist-mono/wght.css';
+
+@layer components {
+  .auth-screen {
+    --font-sans:
+      'Geist Variable', ui-sans-serif, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    --font-mono: 'Geist Mono Variable', ui-monospace, 'SF Mono', SFMono-Regular, Menlo, monospace;
+    font-family: var(--font-sans);
+  }
+  .auth-screen .auth-title {
+    font-family: 'Encode Sans Expanded', 'Geist Variable', ui-sans-serif, sans-serif;
+    font-weight: 300;
+    letter-spacing: -0.01em;
+  }
+}

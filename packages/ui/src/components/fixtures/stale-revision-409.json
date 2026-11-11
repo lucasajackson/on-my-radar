@@ -1,0 +1,13 @@
+{"error": {
+  "code": "stale_revision",
+  "message": "This blip is at revision 2, not 1. Merge your change into the current blip (in `current`) and retry with expectedRevision 2.",
+  "current": {
+    "revision": 2, "lastEditedBy": {"userId": "cf98e4b8-5582-4c69-96a9-d544cffe0a93", "agentId": "129e0928-3aab-4e46-acb2-abfcc4f7d71e", "name": "Agent A", "at": "2026-11-02T00:08:01.172Z"}, "id": "9a5e93b7-d1f0-46f7-aa9a-92dd4229b11b", "dueAt": null,
+    "reminder": null, "radarId": "079dcb54-46ce-4c27-8737-aa500578ec88", "kind": "note", "state": "later",
+    "status": "todo", "supersedes": null, "supersedesTitle": null, "supersededBy": null,
+    "title": null, "body": "A wins", "url": null, "preview": null,
+    "tags": [], "pinned": false, "attachments": [], "commentCount": 0,
+    "lastActivityAt": "2026-11-02T00:08:01.144Z", "archivedAt": null, "reactions": [], "author": {"id": "cf98e4b8-5582-4c69-96a9-d544cffe0a93", "name": "Lucas", "email": "lucas@example.test"},
+    "agent": null, "voice": null, "createdAt": "2026-11-02T00:08:01.144Z", "updatedAt": "2026-11-02T00:08:01.177Z"
+  }
+}}

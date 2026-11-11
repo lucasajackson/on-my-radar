@@ -1,0 +1,304 @@
+/*
+  Linking the charter to the map: the underline on a linked passage, the popover on it, the picker
+  that takes the selection toolbar's place, and the passages listed on a boundary or contract.
+  In @layer components like the rest of the component rules in styles.css.
+
+  A boundary link is a dotted underline in the radar's accent; a contract link is dashed teal. An
+  ADR amendment is a strike or a tinted mark, so a linked passage never reads as one.
+*/
+@layer components {
+  .arch,
+  .passage-pop {
+    --link-boundary: var(--accent-from);
+    --link-contract: color-mix(in srgb, #14b8a6 65%, var(--paper));
+  }
+
+  ::highlight(charter-link-boundary) {
+    text-decoration: underline dotted;
+    text-decoration-color: var(--link-boundary, #60a5fa);
+    text-decoration-thickness: 2px;
+  }
+  ::highlight(charter-link-contract) {
+    text-decoration: underline dashed;
+    text-decoration-color: var(--link-contract, #2dd4bf);
+    text-decoration-thickness: 2px;
+  }
+  ::highlight(link-selection) {
+    background-color: color-mix(in srgb, var(--accent-from) 30%, transparent);
+  }
+  ::highlight(charter-flash) {
+    background-color: color-mix(in srgb, var(--accent-from) 45%, transparent);
+  }
+  /* The editor draws the same underline as a decoration on the words. */
+  .charter-link {
+    text-decoration: underline dotted;
+    text-decoration-color: var(--link-boundary);
+    text-decoration-thickness: 2px;
+    text-underline-offset: 3px;
+    cursor: pointer;
+  }
+  .charter-link.is-contract {
+    text-decoration-style: dashed;
+    text-decoration-color: var(--link-contract);
+  }
+  .charter-link.is-flash {
+    background-color: color-mix(in srgb, var(--accent-from) 40%, transparent);
+  }
+
+  /* More than Propose ADR now: a divider, and room for three actions on a phone. */
+  .amend-bar-actions {
+    flex-wrap: wrap;
+  }
+  .amend-bar-divider {
+    align-self: stretch;
+    width: 1px;
+    margin: 0.2rem 0.1rem;
+    background: var(--line);
+  }
+  @media (max-width: 1023.98px) {
+    .amend-bar-actions .btn {
+      flex: 1 1 8rem;
+    }
+    .amend-bar-divider {
+      display: none;
+    }
+  }
+
+  /* ---- the picker, in the toolbar's box ---- */
+  .link-picker {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    min-width: 0;
+    width: min(26rem, calc(100vw - 2rem));
+  }
+  @media (max-width: 1023.98px) {
+    .link-picker {
+      width: auto;
+    }
+  }
+  .link-picker-head {
+    display: flex;
+    gap: 0.4rem;
+    align-items: center;
+  }
+  .link-picker-input {
+    flex: 1;
+    min-width: 0;
+    min-height: 2.75rem;
+  }
+  .link-picker-list {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    max-height: min(15rem, 38dvh);
+    overflow-y: auto;
+    border: 1px solid var(--line-soft);
+    border-radius: 10px;
+  }
+  .link-picker-row {
+    display: flex;
+    flex-direction: column;
+    gap: 0.1rem;
+    min-height: 2.75rem;
+    justify-content: center;
+    padding: 0.4rem 0.7rem;
+    cursor: pointer;
+  }
+  .link-picker-row + .link-picker-row {
+    border-top: 1px solid var(--line-soft);
+  }
+  .link-picker-row.is-active {
+    background: var(--ink-700);
+  }
+  .link-picker-row.is-new {
+    color: var(--accent-from);
+  }
+  .link-picker-title {
+    font-weight: 560;
+    overflow-wrap: anywhere;
+  }
+  .link-picker-detail {
+    font-size: 0.75rem;
+    color: var(--paper-faint);
+    overflow-wrap: anywhere;
+  }
+  .link-picker-empty {
+    padding: 0.7rem;
+    font-size: 0.8125rem;
+    color: var(--paper-dim);
+  }
+  .link-picker-problem {
+    margin: 0;
+    font-size: 0.8125rem;
+    line-height: 1.35;
+    color: var(--danger);
+    overflow-wrap: anywhere;
+  }
+
+  /* ---- the popover on a linked passage ---- */
+  .passage-pop {
+    position: fixed;
+    top: 0;
+    left: 0;
+    z-index: 40;
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    width: max-content;
+    max-width: min(26rem, calc(100vw - 1rem));
+    padding: 0.35rem;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    background: var(--ink-800);
+    box-shadow: 0 6px 24px rgb(0 0 0 / 0.35);
+  }
+  .passage-pop:not([data-placed]) {
+    visibility: hidden;
+  }
+  .passage-pop-row {
+    display: flex;
+    flex-wrap: nowrap;
+    align-items: center;
+    gap: 0.25rem 0.5rem;
+    padding: 0.15rem 0.25rem;
+  }
+  .passage-pop-name {
+    display: flex;
+    flex: 1 1 8rem;
+    min-width: 0;
+    flex-direction: column;
+    overflow-wrap: anywhere;
+  }
+  .passage-pop-name .instrument {
+    color: var(--paper-faint);
+  }
+  .passage-pop-kind {
+    display: grid;
+    flex: none;
+    place-items: center;
+    width: 1.4rem;
+    height: 1.4rem;
+    border: 1.5px solid var(--link-boundary);
+    border-radius: 50%;
+    color: var(--link-boundary);
+    font: 700 0.6875rem/1 var(--font-sans);
+  }
+  .passage-pop-kind.is-contract {
+    border-color: var(--link-contract);
+    color: var(--link-contract);
+  }
+  @media (max-width: 1023.98px) {
+    .passage-pop-row {
+      flex-wrap: wrap;
+    }
+    .passage-pop .btn {
+      min-height: 2.75rem;
+    }
+  }
+
+  /* ---- the passages listed on a boundary or contract ---- */
+  .linked-sections {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+  .linked-sections h4 {
+    margin: 0;
+  }
+  .arch-detail .linked-sections {
+    margin-top: 1rem;
+  }
+  .linked-section {
+    padding: 0.6rem 0.75rem;
+    border: 1px solid var(--line-soft);
+    border-radius: 10px;
+  }
+  .linked-section blockquote {
+    margin: 0;
+    padding-left: 0.75rem;
+    border-left: 3px solid var(--line);
+    font-family: var(--font-serif);
+    font-size: 0.9375rem;
+    line-height: 1.45;
+    color: var(--paper-dim);
+    overflow-wrap: anywhere;
+  }
+  .linked-section-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.25rem 0.5rem;
+    margin-top: 0.4rem;
+  }
+  .linked-section-where {
+    flex: 1 1 auto;
+    font-size: 0.75rem;
+    color: var(--paper-faint);
+  }
+  .linked-section .btn,
+  .charter-orphan-actions .btn {
+    min-height: 2.75rem;
+  }
+  @media (min-width: 1024px) {
+    .linked-section .btn,
+    .charter-orphan-actions .btn {
+      min-height: 2.25rem;
+    }
+  }
+  .linked-section.is-orphan {
+    border-style: dashed;
+    border-color: color-mix(in srgb, var(--orphan) 70%, transparent);
+    background: color-mix(in srgb, var(--orphan) 6%, transparent);
+  }
+  .linked-section.is-orphan blockquote {
+    color: var(--paper-faint);
+    border-left-color: color-mix(in srgb, var(--orphan) 60%, transparent);
+  }
+
+  /* ---- the orphan tray ---- */
+  .charter-orphan-title {
+    margin: 0.4rem 0 0;
+    font-weight: 560;
+    line-height: 1.35;
+  }
+  .charter-orphan-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.25rem 0.5rem;
+    margin-top: 0.6rem;
+  }
+  .charter-orphan-actions .charter-orphan-hint {
+    flex: 1 1 auto;
+    margin: 0;
+  }
+  .charter-orphan.is-reanchoring {
+    border-style: solid;
+    border-color: var(--accent-from);
+  }
+  /* From 1024px it stays under the bar while a long charter is scrolled to the passage. On a
+     phone the docked toolbar carries the Cancel, so the banner just sits at the top. */
+  .reanchor-banner {
+    margin-bottom: 0.75rem;
+    scroll-margin-top: calc(var(--radar-header-h, 6.25rem) + 5rem);
+  }
+  @media (min-width: 1024px) {
+    .charter-alert.reanchor-banner {
+      position: sticky;
+      top: calc(var(--radar-header-h, 6.25rem) - 1px + var(--arch-bar, 3.75rem));
+      z-index: 4;
+      background: color-mix(in srgb, var(--accent-from) 10%, var(--ink-850));
+    }
+  }
+}
+
+@layer components {
+  /* A toast must not sit on the docked toolbar or picker: while one is up, toasts move to the top. */
+  @media (max-width: 1023.98px) {
+    body:has(.amend-bar) .toast-host {
+      bottom: auto;
+      top: max(0.75rem, env(safe-area-inset-top));
+    }
+  }
+}

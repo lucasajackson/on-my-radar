@@ -1,0 +1,40 @@
+-- On My Radar — a radar may be styled.
+--
+-- Additive, defaulted and non-null, so it applies to a populated database with
+-- no backfill and no nullable-vs-empty ambiguity to reason about later. `{}` is
+-- a whole valid theme: `themeFor` resolves every missing axis to its default, so
+-- an empty object and "the product's own look" are the same thing by
+-- construction rather than by a rule somebody has to remember.
+--
+-- ## Why jsonb and not nine columns
+--
+-- The same argument as `template_config`, `blips.status` and
+-- `blip_reactions.reaction`: the vocabulary is validated by a registry in
+-- `packages/contract/src/theme.ts`, which both transports and the SPA share. Nine
+-- columns would put the vocabulary in two places — SQL and the registry — and
+-- adding a tenth axis, or a tenth surface, would need a migration to ship a
+-- purely cosmetic option. It would also need a CHECK constraint per axis to be
+-- worth anything, and a CHECK constraint listing every surface is a list that
+-- goes stale the first time somebody adds one.
+--
+-- Nothing queries inside this column. It is read whole with the row, resolved
+-- through `themeFor`, and put on the wire. So there is no index, and no reason
+-- for one.
+--
+-- ## What is NOT stored here
+--
+-- **No CSS, and no preset name.**
+--
+-- No CSS because there is no code path from this column to a stylesheet: the SPA
+-- turns each value into a `data-` attribute whose matching rule is static and
+-- shipped in the bundle. A value this column holds that the registry does not
+-- know matches no rule and renders as the default. That property is what makes
+-- theming a public page safe at all — see the header of theme.ts for why the CSP
+-- cannot be the defence.
+--
+-- No preset name because a preset is a *starting point*, expanded to the nine
+-- axes at write time and then forgotten. Storing it too would be a second source
+-- of truth that starts disagreeing with the first the moment somebody nudges one
+-- axis after picking it.
+
+ALTER TABLE radars ADD COLUMN theme jsonb NOT NULL DEFAULT '{}'::jsonb;

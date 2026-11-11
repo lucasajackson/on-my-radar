@@ -1,0 +1,8 @@
+# Used by `gitleaks detect --no-git -s .` (the default rules plus the two known false positives).
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "sha256 checksums of migration files, and a fake token prefix in a test"
+paths = ['''packages/server/src/db/migrations-at-0089\.json''']
+regexes = ['''omr_int_abc123''']

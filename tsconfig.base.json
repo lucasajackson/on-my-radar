@@ -1,0 +1,60 @@
+{
+  "compilerOptions": {
+    "target": "ES2023",
+    "lib": ["ES2023"],
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "noImplicitOverride": true,
+    /* `process.env.FOO` becomes `process.env['FOO']`. The repo already wrote it
+       that way in 38 places and dot-accessed it in 3; this makes the convention
+       enforced rather than remembered. */
+    "noPropertyAccessFromIndexSignature": true,
+    "noUnusedLocals": true,
+    /* Both unused-* flags honour a leading underscore, which is the same escape
+       hatch `@typescript-eslint/no-unused-vars` is already configured with. */
+    "noUnusedParameters": true,
+    "noImplicitReturns": true,
+    "noFallthroughCasesInSwitch": true,
+    /* Clean when enabled on 2026-09-26: unreachable code and unused labels
+       are errors rather than editor hints, and a side-effect import of a path
+       that does not resolve is an error rather than silently nothing. */
+    "allowUnreachableCode": false,
+    "allowUnusedLabels": false,
+    "noUncheckedSideEffectImports": true,
+
+    /*
+     * On everywhere. packages/ui went clean in its own review (24 errors,
+     * 2026-09-26), also without casts.
+     *
+     * How server went clean (34 errors, 2026-09-26), with no `as`:
+     * - Input positions say `?: T | undefined`, because zod infers optional
+     *   output that way and a hand-written `?: T` refuses it. A value that may
+     *   be absent is spread conditionally where a library wants the key gone
+     *   (the S3 `endpoint` and `abortSignal`, APNs `invalidBefore`).
+     * - A DTO that restated a schema is now the schema's inferred type
+     *   (`DashboardWidgetConfig`), and `validateLanes` accepts the parsed lane
+     *   shape and returns `BlipStatusDef`s with `terminal` only when given.
+     * - The MCP route uses the SDK's web-standard server transport. The Node one
+     *   declares `onclose` and friends as accessors typed `| undefined`, which is
+     *   not assignable to the SDK's own `Transport`; the web one is, and Hono
+     *   already speaks Request/Response. The tests' client transport has the
+     *   same defect on `sessionId`, so `src/mcp/test-client.ts` hands
+     *   `Client.connect` a plain delegating `Transport` instead of a cast.
+     */
+    "exactOptionalPropertyTypes": true,
+
+    /* `useUnknownInCatchVariables` is already on, via `strict`. `errors.ts`
+       exists because of it. */
+
+    "verbatimModuleSyntax": true,
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true,
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true
+  }
+}

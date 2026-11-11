@@ -1,0 +1,13 @@
+node_modules
+dist
+pnpm-lock.yaml
+packages/server/drizzle
+charts
+# Golden files are exact renderer output; formatting them would break the comparison.
+packages/server/src/__golden__
+
+# Verbatim fixtures: formatting them would change what the tests prove.
+packages/contract/test/fixtures
+
+# A real server response, captured verbatim (stale_revision 409).
+packages/ui/src/components/fixtures

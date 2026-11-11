@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "omr": {
+      "command": "node",
+      "args": ["${CLAUDE_PLUGIN_ROOT}/bin/omr-agent.mjs", "mcp"]
+    }
+  }
+}

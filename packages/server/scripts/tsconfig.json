@@ -1,0 +1,18 @@
+{
+  /*
+   * The operator scripts and the vitest config sit outside `src`, so the
+   * package's own tsconfig (rootDir: src, which emits dist) cannot include
+   * them — and before this file nothing type-checked them at all. `pnpm
+   * typecheck` runs this project as well. Named tsconfig.json so typed lint's
+   * project service finds it as the nearest config for scripts/.
+   */
+  "extends": "../../../tsconfig.base.json",
+  "compilerOptions": {
+    "types": ["node"],
+    "noEmit": true,
+    "declaration": false,
+    "declarationMap": false,
+    "sourceMap": false
+  },
+  "include": ["./**/*.ts", "../vitest.config.ts"]
+}

@@ -1,0 +1,12 @@
+{
+  "name": "omr",
+  "displayName": "On My Radar",
+  "version": "0.4.0",
+  "description": "Runs this workspace's On My Radar agent from the first turn: loads it before the session starts (fail-closed), connects its MCP server through the same login, and steers its memory to On My Radar (an advisory guard on local memory writes).",
+  "author": {
+    "name": "On My Radar",
+    "url": "https://onmyradar.io"
+  },
+  "homepage": "https://onmyradar.io",
+  "license": "UNLICENSED"
+}

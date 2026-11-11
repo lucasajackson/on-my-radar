@@ -1,0 +1,19 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "outDir": "dist",
+    "rootDir": "src",
+    "types": ["node"]
+  },
+  /*
+   * Tests are checked too.
+   *
+   * They used to be excluded, which meant 351 tests — this repo's primary
+   * defence, and the only thing that runs against a real Postgres — were free
+   * to rot: a renamed field or a changed signature broke nothing until the
+   * suite happened to run. `tsc` emits `dist` from this same config, and the
+   * test files are simply not imported by `src/index.ts`, so nothing about them
+   * reaches the built image.
+   */
+  "include": ["src/**/*.ts"]
+}

@@ -1,0 +1,36 @@
+-- Universal search: one index, and the reasoning for why it is the only one.
+--
+-- The grammar added eight filters. Seven of them already had an index, which is
+-- the point of writing this down rather than adding eight:
+--
+--   in:          blips (radar_id, …)  — the IN list is the leading column of
+--                blips_radar_created_idx, and it is the first predicate applied.
+--   tag:         blips_tags_idx        — GIN over text[], serves `@>`.
+--   is: (state)  blips_state_idx       — (radar_id, state).
+--   is:pinned    blips_radar_pinned_idx — partial, WHERE pinned = true.
+--   has:link     no index, and none wanted: `url IS NOT NULL` is true of a large
+--                fraction of rows, so a scan of the already-narrowed radar set
+--                beats an index lookup. A partial index here would be cargo.
+--   has:file     attachments_blip_idx  — the EXISTS subquery's join column.
+--   has:comment  blip_comments_blip_idx — likewise.
+--   before/after blips_radar_created_idx — created_at is its second column, so a
+--                range within a radar set is already ordered.
+--   free text    blips_search_idx      — GIN over the GENERATED tsvector.
+--
+-- `from:` was the only one with nothing behind it. `blips.author_id` has never
+-- been indexed because nothing ever filtered on it: the column existed to render
+-- a byline, which is a lookup by blip and not by author.
+--
+-- Ordered (author_id, created_at DESC) rather than on author_id alone, because
+-- every query that reaches for it also sorts by capture time — either as the
+-- whole order (`from:lucas is:done`, no words to rank) or as the tiebreak under
+-- the relevance score. The second column costs nothing to carry and turns a
+-- filter-then-sort into an ordered scan for the common case.
+--
+-- No index for relevance ordering, and none is possible: `ts_rank_cd` is
+-- computed per matching row, so Postgres sorts the matched set. That is the
+-- honest cost of ranking by match rather than by date, and it is bounded by
+-- `blips_search_idx` having already reduced the set to rows that match the
+-- words at all. Stated in docs/DESIGN.md as the ceiling this design accepts.
+
+CREATE INDEX IF NOT EXISTS blips_author_idx ON blips (author_id, created_at DESC);

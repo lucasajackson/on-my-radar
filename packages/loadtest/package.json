@@ -1,0 +1,23 @@
+{
+  "name": "@onmyradar/loadtest",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Scale load test \u2014 seeds a local Postgres and drives a prod-constrained container with k6. Never aimed at a shared environment.",
+  "scripts": {
+    "start": "tsx src/run.ts",
+    "seed": "tsx src/seed.ts",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "tsx --test src/config.test.ts"
+  },
+  "devDependencies": {
+    "@types/node": "22.20.1",
+    "@types/pg": "8.21.0",
+    "pg": "8.23.0",
+    "tsx": "4.23.12",
+    "typescript": "5.9.3"
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  }
+}

@@ -1,0 +1,27 @@
+node_modules/
+dist/
+*.tsbuildinfo
+.env
+.env.local
+test-results.json
+.DS_Store
+coverage/
+
+# Phone-suite screenshots and report — evidence, not source.
+packages/phone/.out/
+
+# Claude Code scratch worktrees — never part of the app.
+.claude/worktrees/
+
+# Local email Worker runtime state and credentials.
+packages/email-worker/.wrangler/
+.dev.vars
+.dev.vars.*
+
+# iCloud Drive syncs ~/Documents and drops "name 2.ext" conflict copies beside
+# real files; never track them.
+* 2.*
+* 2
+
+# omr-agent plugin build output (agent-setup/build-plugin.mjs)
+agent-setup/dist/

@@ -1,0 +1,25 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    /*
+     * DOM alongside node, which is unusual in this repo and deliberate. Half of
+     * this package is a Node process that stands the server up; the other half
+     * is callbacks handed to `page.evaluate`, which run inside the browser. They
+     * have to compile as one program because puppeteer serialises the function
+     * itself and ships it over CDP.
+     *
+     * `skipLibCheck` (inherited from the base) is what keeps the pair quiet:
+     * @types/node and lib.dom both declare `fetch`, `Headers` and friends, and
+     * those duplicate declarations live inside .d.ts files.
+     */
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "types": ["node"],
+    "noEmit": true,
+    "declaration": false,
+    "declarationMap": false,
+    "sourceMap": false,
+    "allowJs": true,
+    "checkJs": true
+  },
+  "include": ["src/**/*.ts"]
+}

@@ -1,0 +1,36 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    /*
+     * Only what genuinely differs from the base, which is the shape
+     * `packages/phone` already uses. This file used to hand-duplicate nine
+     * settings and extend nothing — drift rather than choice, and it had
+     * already silently lost `noImplicitOverride`. A per-package copy of the
+     * repo's compiler settings cannot be kept in step with the original by
+     * anything except somebody remembering.
+     *
+     * The browser half: ESNext modules resolved the way Vite resolves them, the
+     * DOM lib, React's automatic JSX runtime, and Vite's own client types
+     * instead of Node's.
+     */
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "jsx": "react-jsx",
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "types": ["vite/client"],
+    "resolveJsonModule": true,
+    /* As in server, contract and phone: an optional prop that is absent and one
+       set to `undefined` are different things to React, and an API body that
+       spreads an `undefined` field sends `"x": null`-shaped surprises. */
+    "exactOptionalPropertyTypes": true,
+    /* Vite compiles each file on its own; nothing may rely on cross-file
+       type-only elision beyond what `verbatimModuleSyntax` already enforces. */
+    "isolatedModules": true,
+    /* Vite emits the bundle. tsc is only ever the checker here. */
+    "noEmit": true,
+    "declaration": false,
+    "declarationMap": false,
+    "sourceMap": false
+  },
+  "include": ["src/**/*.ts", "src/**/*.tsx", "vite.config.ts"]
+}

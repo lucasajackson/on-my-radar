@@ -1,0 +1,18 @@
+node_modules
+**/node_modules
+**/dist
+.git
+.env*
+docs
+charts
+*.md
+!README.md
+
+**/.wrangler
+**/.dev.vars*
+
+# A phone-suite run: screenshots and a full copy of the built SPA. Never image input.
+packages/phone/.out
+
+# A load-test run: fixtures hold the throwaway database's plaintext tokens.
+packages/loadtest/.out

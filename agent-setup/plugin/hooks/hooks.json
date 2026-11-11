@@ -1,0 +1,44 @@
+{
+  "description": "On My Radar: load the workspace's agent before the first turn (split over four outputs so a long prompt arrives whole; on startup, /clear and compaction, not on resume), and an advisory guard that keeps its memory out of local files.",
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup|clear|compact",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "sh \"${CLAUDE_PLUGIN_ROOT}/bin/omr-boot\" claude-code 1/4 --mcp-name plugin:omr:omr",
+            "timeout": 20
+          },
+          {
+            "type": "command",
+            "command": "sh \"${CLAUDE_PLUGIN_ROOT}/bin/omr-boot\" claude-code 2/4 --mcp-name plugin:omr:omr",
+            "timeout": 20
+          },
+          {
+            "type": "command",
+            "command": "sh \"${CLAUDE_PLUGIN_ROOT}/bin/omr-boot\" claude-code 3/4 --mcp-name plugin:omr:omr",
+            "timeout": 20
+          },
+          {
+            "type": "command",
+            "command": "sh \"${CLAUDE_PLUGIN_ROOT}/bin/omr-boot\" claude-code 4/4 --mcp-name plugin:omr:omr",
+            "timeout": 20
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Write|Edit|MultiEdit|NotebookEdit|Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "sh \"${CLAUDE_PLUGIN_ROOT}/bin/omr-boot\" guard-memory",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  }
+}
