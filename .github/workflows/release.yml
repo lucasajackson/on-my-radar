@@ -1,0 +1,117 @@
+name: Release
+
+# main publishes `edge` and `sha-<short>`; a v* tag publishes the version, its minor and `latest`
+# (the last two only for a final release) plus the chart. Each architecture builds on a native
+# runner and the two are joined into one multi-arch tag.
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  REGISTRY: ghcr.io
+
+jobs:
+  image:
+    if: github.repository == 'lucasajackson/on-my-radar'
+    strategy:
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-latest
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Build and push the ${{ matrix.arch }} image
+        env:
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ARCH: ${{ matrix.arch }}
+        run: |
+          set -eu
+          image="$REGISTRY/lucasajackson/on-my-radar"
+          short=$(printf %s "$GITHUB_SHA" | cut -c1-7)
+          printf %s "$TOKEN" | docker login "$REGISTRY" -u "$GITHUB_ACTOR" --password-stdin
+          # Per-architecture tags are the hand-off to the next job; they are not for users.
+          docker buildx build --target runtime --platform "linux/$ARCH" --provenance=false \
+            --build-arg "ONMYRADAR_BUILD_SHA=$GITHUB_SHA" \
+            --label "org.opencontainers.image.source=https://github.com/$GITHUB_REPOSITORY" \
+            --label "org.opencontainers.image.revision=$GITHUB_SHA" \
+            --label "org.opencontainers.image.licenses=Apache-2.0" \
+            --tag "$image:build-$short-$ARCH" --push .
+
+  manifest:
+    needs: image
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Join the architectures and tag
+        env:
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REF_TYPE: ${{ github.ref_type }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          set -eu
+          image="$REGISTRY/lucasajackson/on-my-radar"
+          short=$(printf %s "$GITHUB_SHA" | cut -c1-7)
+          if [ "$REF_TYPE" = tag ]; then
+            # v1.2.3 or v1.2.3-rc.1; anything else is not a release.
+            printf %s "$REF_NAME" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$' \
+              || { echo "tag $REF_NAME is not vMAJOR.MINOR.PATCH[-pre]" >&2; exit 1; }
+            version=${REF_NAME#v}
+            tags="$version"
+            case "$version" in
+              *-*) ;; # a pre-release moves neither the minor tag nor latest
+              *) tags="$tags $(printf %s "$version" | cut -d. -f1-2) latest" ;;
+            esac
+          else
+            tags="edge sha-$short"
+          fi
+          args=""
+          for t in $tags; do args="$args --tag $image:$t"; done
+          printf %s "$TOKEN" | docker login "$REGISTRY" -u "$GITHUB_ACTOR" --password-stdin
+          # shellcheck disable=SC2086
+          docker buildx imagetools create $args "$image:build-$short-amd64" "$image:build-$short-arm64"
+          for t in $tags; do docker buildx imagetools inspect "$image:$t" | grep -E 'Platform:|Name:'; done
+
+  chart:
+    # Only a release has a chart; main's chart is the checkout's.
+    if: github.ref_type == 'tag'
+    needs: manifest
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - run: sh charts/install-tools.sh "$RUNNER_TEMP/bin" && echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+      - run: sh charts/check.sh
+      - name: Package and push the chart
+        env:
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          set -eu
+          # The image tag and the chart's appVersion are the same string: the tag without its "v".
+          version=${REF_NAME#v}
+          helm package charts/on-my-radar --version "$version" --app-version "$version" --destination "$RUNNER_TEMP"
+          printf %s "$TOKEN" | helm registry login "$REGISTRY" --username "$GITHUB_ACTOR" --password-stdin
+          owner=$(printf %s "$GITHUB_REPOSITORY_OWNER" | tr '[:upper:]' '[:lower:]')
+          helm push "$RUNNER_TEMP/on-my-radar-$version.tgz" "oci://$REGISTRY/$owner/charts"

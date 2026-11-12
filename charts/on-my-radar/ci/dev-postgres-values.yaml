@@ -1,0 +1,7 @@
+# A try-it install: the chart's own throwaway Postgres.
+publicUrl: https://notes.example.test
+secrets:
+  sessionSecret: ci-only-session-secret-not-used-anywhere-else
+postgres:
+  enabled: true
+  password: ci-only-postgres-password

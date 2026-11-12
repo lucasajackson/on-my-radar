@@ -1594,6 +1594,58 @@ test('site build stamps the deployment origin into prompt.md and the bundled omr
   assert.equal(market.owner.url, 'https://omr.example.org');
 });
 
+test('siteFiles is pure and byte-identical to what buildSite writes', async () => {
+  const { buildSite, siteFiles } = await import('../agent-setup/build-plugin.mjs');
+  const { readdirSync } = await import('node:fs');
+  for (const baseUrl of [
+    'https://onmyradar.io/agent-setup',
+    'https://omr.example.test/agent-setup',
+  ]) {
+    const out = join(mkdtempSync(join(tmpdir(), 'omr-pure-')), 'never-created');
+    const files = siteFiles(baseUrl);
+    assert.ok(!existsSync(out), 'siteFiles writes nothing');
+    const written = buildSite({ out, baseUrl });
+    assert.deepEqual([...files.keys()], written.files);
+    assert.deepEqual(readdirSync(out).sort(), [...files.keys()].sort());
+    for (const [name, bytes] of files) {
+      assert.ok(Buffer.isBuffer(bytes), name);
+      assert.ok(bytes.equals(readFileSync(join(out, name))), `${name} bytes differ`);
+    }
+  }
+});
+
+test('siteFiles stamps one origin everywhere and the digests agree with the served bytes', async () => {
+  const { siteFiles } = await import('../agent-setup/build-plugin.mjs');
+  const origin = 'https://omr.example.test';
+  const files = siteFiles(`${origin}/agent-setup`);
+  const text = (name) => files.get(name).toString('utf8');
+  const sha = (bytes) => createHash('sha256').update(bytes).digest('hex');
+  assert.match(text('prompt.md'), /https:\/\/omr\.example\.test\/agent-setup\/omr-agent\.mjs/);
+  assert.doesNotMatch(text('prompt.md'), /onmyradar\.io|localhost/);
+  assert.match(
+    text('omr-agent.mjs'),
+    /^export const DEFAULT_ORIGIN = 'https:\/\/omr\.example\.test';$/m,
+  );
+  const market = JSON.parse(text('marketplace.json'));
+  const source = market.plugins[0].source;
+  const archiveName = source.url.split('/').pop();
+  assert.equal(source.url, `${origin}/agent-setup/${archiveName}`);
+  assert.equal(source.sha256, sha(files.get(archiveName)));
+  assert.equal(
+    readZip(files.get(archiveName))['bin/omr-agent.mjs'].data.toString(),
+    text('omr-agent.mjs'),
+  );
+  const sums = text('SHA256SUMS').trim().split('\n');
+  assert.deepEqual(
+    sums.map((l) => l.split(/\s+/)[1]).sort(),
+    ['omr-agent.mjs', archiveName, 'prompt.md'].sort(),
+  );
+  for (const line of sums) {
+    const [digest, name] = line.split(/\s+/);
+    assert.equal(sha(files.get(name)), digest, name);
+  }
+});
+
 test('site build: every file prompt.md names, SHA256SUMS true, prompt static and stamped', async () => {
   const { buildSite } = await import('../agent-setup/build-plugin.mjs');
   const out = mkdtempSync(join(tmpdir(), 'omr-site-'));

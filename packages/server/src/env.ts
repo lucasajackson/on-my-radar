@@ -383,6 +383,13 @@ const envSchema = z.object({
   /** Where the built SPA lives. Set by the Dockerfile. */
   UI_DIST_DIR: z.string().optional(),
 
+  /**
+   * The `agent-setup/` source directory (it holds `build-plugin.mjs`). Set by the
+   * runtime image. When set, `/agent-setup/*` is stamped from `PUBLIC_URL` and
+   * served from memory; when unset it is served from the UI bundle on disk.
+   */
+  AGENT_SETUP_SRC: z.string().optional(),
+
   /** Set by CI as the git SHA of the commit this image was built from. */
   ONMYRADAR_BUILD_SHA: z.string().default(''),
 });

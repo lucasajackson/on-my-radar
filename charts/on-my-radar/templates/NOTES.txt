@@ -1,0 +1,33 @@
+On My Radar {{ .Chart.AppVersion }} is installed as {{ .Release.Name }}.
+
+It will be reached at {{ include "omr.publicUrl" . }}
+{{- if .Values.ingress.enabled }} through the Ingress {{ include "omr.fullname" . }}.
+{{- else }}. No Ingress was created (ingress.enabled=false); until you add one, try it with:
+
+  kubectl --namespace {{ .Release.Namespace }} port-forward svc/{{ include "omr.fullname" . }} 3500:{{ .Values.service.port }}
+
+Sign-in links and the agent-setup page use publicUrl, not the port-forward address, so only
+the health checks are meaningful that way: curl http://127.0.0.1:3500/health/ready
+{{- end }}
+
+Check on it:
+
+  kubectl --namespace {{ .Release.Namespace }} get pods -l app.kubernetes.io/instance={{ .Release.Name }}
+  kubectl --namespace {{ .Release.Namespace }} logs deploy/{{ include "omr.fullname" . }}
+
+Things to do before you rely on it:
+{{- if not .Values.mail.provider }}
+  * Mail is not configured (mail.provider is empty), so no sign-in code can be emailed.
+    Set mail.provider=smtp and secrets.smtpUrl (or existingSecret with SMTP_URL).
+{{- end }}
+{{- if .Values.ingress.enabled }}
+  * Your ingress must set the {{ .Values.trustedIpHeader }} request header to the client's real
+    address, overwriting any value the client sent. Sign-in limits are per network and read it.
+{{- else }}
+  * When you put an ingress or proxy in front, have it set the {{ .Values.trustedIpHeader }} request
+    header to the client's real address, overwriting any value the client sent.
+{{- end }}
+{{- if .Values.postgres.enabled }}
+  * postgres.enabled=true is a throwaway database: one pod and one volume, no backups.
+{{- end }}
+  * Keep publicUrl as it is. OAuth, MCP connections and webhooks are built from it.

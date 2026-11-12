@@ -1,0 +1,119 @@
+# On My Radar. Every key here is documented in README.md (a test keeps the two in step).
+
+# Required. The address people and agents reach this install at, e.g. https://notes.example.com.
+# OAuth, MCP, webhooks and /agent-setup/ are built from it, so it cannot move once clients have seen it.
+publicUrl: ''
+# Where people go, when that differs from publicUrl. Empty means publicUrl.
+appUrl: ''
+
+image:
+  repository: ghcr.io/lucasajackson/on-my-radar
+  # Empty means the chart's appVersion (a release tag, or `edge` on a checkout).
+  tag: ''
+  pullPolicy: IfNotPresent
+imagePullSecrets: []
+
+nameOverride: ''
+fullnameOverride: ''
+
+# How people get in.
+signupMode: open # open or waitlist
+adminEmails: '' # comma-separated; skips the waitlist and opens the admin screen
+passwordLoginEnabled: false # email and password; needs mail.provider
+# The request header your ingress sets to the client's address. Sign-in limits are per network and
+# read from it, so the ingress MUST overwrite it, or anyone can forge it. See the README.
+trustedIpHeader: x-real-ip
+
+mail:
+  provider: '' # smtp, resend, or empty (nothing can be emailed, so no sign-in codes)
+  from: '' # an address your relay may send from, e.g. On My Radar <notes@example.com>
+
+oidc:
+  issuerUrl: ''
+  clientId: ''
+  providerName: SSO
+
+s3:
+  endpoint: ''
+  region: us-east-1
+  bucket: on-my-radar
+  forcePathStyle: true
+
+# Anything else from .env.example, as Kubernetes env entries (name/value or valueFrom).
+extraEnv: []
+
+# Run migrations when a pod starts. Safe with several replicas: they take an advisory lock.
+migrateOnBoot: true
+
+# Secrets. Either bring a Secret that has these keys (existingSecret), or set the values below and
+# the chart makes one. Values in a values file end up in the release's stored state: prefer
+# existingSecret, filled by your own secret tooling.
+#   Keys: SESSION_SECRET, DATABASE_URL; optional SMTP_URL, RESEND_API_KEY, OIDC_CLIENT_SECRET,
+#   S3_ACCESS_KEY, S3_SECRET_KEY.
+existingSecret: ''
+secrets:
+  sessionSecret: '' # 32 or more characters; signs sessions and hashes every issued token
+  databaseUrl: '' # postgres://user:password@host:5432/dbname; computed when postgres.enabled
+  smtpUrl: ''
+  resendApiKey: ''
+  oidcClientSecret: ''
+  s3AccessKey: ''
+  s3SecretKey: ''
+
+app:
+  replicas: 1
+  resources:
+    requests: { cpu: 100m, memory: 256Mi }
+    limits: { memory: 768Mi }
+  # Startup waits for migrations, which hold the server's port closed. failureThreshold times
+  # periodSeconds is how long a pod may take to become live before it is restarted.
+  startupProbe:
+    periodSeconds: 5
+    failureThreshold: 60
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  podAnnotations: {}
+
+# The outbox: mail, notifications, webhooks, feeds. Same image, different command.
+worker:
+  enabled: true
+  replicas: 1
+  resources:
+    requests: { cpu: 50m, memory: 192Mi }
+    limits: { memory: 512Mi }
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  podAnnotations: {}
+
+service:
+  type: ClusterIP
+  port: 3500
+
+ingress:
+  enabled: false
+  className: ''
+  # Set the client-address header (trustedIpHeader) here, e.g. for ingress-nginx
+  # nginx.ingress.kubernetes.io/configuration-snippet: proxy_set_header X-Real-IP $remote_addr;
+  annotations: {}
+  # The host is taken from publicUrl.
+  tls:
+    enabled: false
+    secretName: ''
+
+# A single Postgres for trying things out: one pod, one volume, no backups, no replication.
+# For anything you care about, use a managed or operator-run Postgres and set secrets.databaseUrl.
+postgres:
+  enabled: false
+  image:
+    repository: postgres
+    tag: 16-alpine
+  # Required when enabled. Letters, digits and . _ ~ - only, as it goes into a URL.
+  password: ''
+  persistence:
+    size: 2Gi
+    storageClass: ''
+  resources:
+    requests: { cpu: 50m, memory: 128Mi }
+    limits: { memory: 512Mi }

@@ -18,6 +18,7 @@ import { singleUserHostFence } from './auth/single-user.js';
 import { crossOriginAccess } from './cors.js';
 import { refuseCrossSiteWrites } from './csrf.js';
 import { getDb, schema } from './db/client.js';
+import { agentSetupFiles } from './agent-setup.js';
 import { env } from './env.js';
 import { ApiError, errorBody, type AppEnv, type Ctx } from './http.js';
 import { logger } from './logger.js';
@@ -556,19 +557,26 @@ function mountSpa(app: Hono<AppEnv>) {
    * itself (`ui.enabled=false`, a local production build). The same rules as
    * nginx (packages/ui/deploy/nginx.conf): exact types; `no-cache` except the
    * zip, whose name carries its digest; and a 404 — never the SPA shell — for
-   * anything absent, so `curl … | node` is never handed HTML.
+   * anything absent, so `curl … | node` is never handed HTML. With
+   * `AGENT_SETUP_SRC` (the public image) the files are stamped from `PUBLIC_URL`
+   * in memory (agent-setup.ts) instead of read from the bundle.
    */
   app.get('/agent-setup/:file', async (c) => {
     const file = c.req.param('file');
     const type =
       file === 'SHA256SUMS' ? 'text/plain; charset=utf-8' : AGENT_SETUP_TYPES[extname(file)];
     if (!type || !/^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/.test(file)) return c.text('Not found', 404);
-    let body: Buffer;
-    try {
-      body = await readFile(join(dir, 'agent-setup', file));
-    } catch {
-      return c.text('Not found', 404);
+    let body: Uint8Array | undefined;
+    const stamped = agentSetupFiles();
+    if (stamped) body = (await stamped).get(file);
+    else {
+      try {
+        body = await readFile(join(dir, 'agent-setup', file));
+      } catch {
+        /* absent */
+      }
     }
+    if (!body) return c.text('Not found', 404);
     c.header('content-type', type);
     c.header(
       'cache-control',

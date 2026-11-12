@@ -1,0 +1,5 @@
+# What a self-hoster must set, against a Postgres they run themselves.
+publicUrl: https://notes.example.test
+secrets:
+  sessionSecret: ci-only-session-secret-not-used-anywhere-else
+  databaseUrl: postgres://onmyradar:onmyradar@db.example.test:5432/onmyradar

@@ -1,0 +1,15 @@
+apiVersion: v2
+name: on-my-radar
+description: 'On My Radar, a capture tool with an MCP server: the app, the outbox worker and an optional development Postgres.'
+type: application
+# Both are set from the git tag when a release is published; these are what a checkout reports.
+version: 0.1.0
+appVersion: edge
+kubeVersion: '>=1.25.0-0'
+home: https://github.com/lucasajackson/on-my-radar
+sources:
+  - https://github.com/lucasajackson/on-my-radar
+keywords:
+  - on-my-radar
+  - mcp
+  - notes

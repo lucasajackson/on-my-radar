@@ -1,0 +1,90 @@
+{{- if .Values.worker.enabled }}
+# The outbox worker: the same image with one different command. It takes no traffic, so it has no
+# Service and no readiness probe; its health listener answers /health/live only.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "omr.workerName" . }}
+  labels:
+    {{- include "omr.labels" . | nindent 4 }}
+    app.kubernetes.io/component: worker
+spec:
+  replicas: {{ .Values.worker.replicas }}
+  selector:
+    matchLabels:
+      {{- include "omr.selector" (dict "root" . "component" "worker") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "omr.labels" . | nindent 8 }}
+        app.kubernetes.io/component: worker
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+        {{- if not .Values.existingSecret }}
+        checksum/secret: {{ include (print $.Template.BasePath "/secret.yaml") . | sha256sum }}
+        {{- end }}
+        {{- with .Values.worker.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      terminationGracePeriodSeconds: 35
+      # Nothing here talks to the Kubernetes API.
+      automountServiceAccountToken: false
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        {{- include "omr.podSecurityContext" (dict "uid" 10001) | nindent 8 }}
+      {{- if .Values.postgres.enabled }}
+      initContainers:
+        {{- include "omr.waitForPostgres" . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: worker
+          image: {{ include "omr.image" . | quote }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          # The image's entrypoint is dumb-init; only the command it runs changes.
+          args: ['node', 'packages/server/dist/worker.js']
+          env:
+            {{- include "omr.env" . | nindent 12 }}
+          envFrom:
+            {{- include "omr.envFrom" . | nindent 12 }}
+          ports:
+            - name: http
+              containerPort: 3500
+              protocol: TCP
+          # The worker also migrates before it listens (see the app's startupProbe).
+          startupProbe:
+            httpGet:
+              path: /health/live
+              port: http
+            periodSeconds: {{ .Values.app.startupProbe.periodSeconds }}
+            failureThreshold: {{ .Values.app.startupProbe.failureThreshold }}
+            timeoutSeconds: 3
+          livenessProbe:
+            httpGet:
+              path: /health/live
+              port: http
+            periodSeconds: 20
+            timeoutSeconds: 3
+          resources:
+            {{- toYaml .Values.worker.resources | nindent 12 }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: false
+            capabilities:
+              drop: ['ALL']
+      {{- with .Values.worker.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.worker.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.worker.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+{{- end }}

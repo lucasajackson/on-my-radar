@@ -45,6 +45,21 @@ Put TLS in front (Caddy, nginx, a tunnel) and set, in the environment or an `.en
 
 Password sign-in never creates an account; the first sign-in of a new person is the emailed code. Anyone can lock an address's password sign-in for a day by guessing wrongly 20 times; the code and SSO still work.
 
+### Kubernetes (Helm)
+
+A multi-arch (amd64 and arm64) image is published to `ghcr.io/lucasajackson/on-my-radar`: `edge` and `sha-<commit>` follow `main`, and each release tag publishes its version (`1.2.3`), `1.2` and `latest`. The Helm chart in [`charts/on-my-radar`](charts/on-my-radar) runs the app and the outbox worker, with an optional Ingress, and takes your own Postgres 16 (or a throwaway one with `postgres.enabled=true`, for trying it out):
+
+```bash
+helm install on-my-radar oci://ghcr.io/lucasajackson/charts/on-my-radar \
+  --namespace on-my-radar --create-namespace \
+  --set publicUrl=https://notes.example.com \
+  --set secrets.sessionSecret=$(openssl rand -hex 32) \
+  --set postgres.enabled=true --set postgres.password=$(openssl rand -hex 16) \
+  --set ingress.enabled=true
+```
+
+`publicUrl` is required and cannot move later. The chart does not offer single-user mode, so set up sign-in as for a real host above: mail, and optionally passwords or SSO. Your ingress has to set the client-address header (`trustedIpHeader`, default `x-real-ip`) and overwrite whatever the client sent. For real use, keep secrets in a Secret of your own (`existingSecret`) rather than in values. Every value is in the chart's [README](charts/on-my-radar/README.md).
+
 ### From source
 
 You need Node 22, pnpm 9 and Postgres 16.

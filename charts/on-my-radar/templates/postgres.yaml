@@ -1,0 +1,107 @@
+{{- if .Values.postgres.enabled }}
+{{- $pw := include "omr.postgresPassword" . -}}
+# A single development Postgres: one pod, one volume. Not for anything you cannot lose.
+apiVersion: v1
+kind: Secret
+metadata:
+  name: {{ include "omr.postgresName" . }}
+  labels:
+    {{- include "omr.labels" . | nindent 4 }}
+    app.kubernetes.io/component: postgres
+type: Opaque
+stringData:
+  POSTGRES_PASSWORD: {{ $pw | quote }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "omr.postgresName" . }}
+  labels:
+    {{- include "omr.labels" . | nindent 4 }}
+    app.kubernetes.io/component: postgres
+spec:
+  clusterIP: None
+  selector:
+    {{- include "omr.selector" (dict "root" . "component" "postgres") | nindent 4 }}
+  ports:
+    - name: postgres
+      port: 5432
+      targetPort: postgres
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ include "omr.postgresName" . }}
+  labels:
+    {{- include "omr.labels" . | nindent 4 }}
+    app.kubernetes.io/component: postgres
+spec:
+  serviceName: {{ include "omr.postgresName" . }}
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "omr.selector" (dict "root" . "component" "postgres") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "omr.labels" . | nindent 8 }}
+        app.kubernetes.io/component: postgres
+    spec:
+      automountServiceAccountToken: false
+      # uid 70 is the postgres user in the alpine image.
+      securityContext:
+        {{- include "omr.podSecurityContext" (dict "uid" 70) | nindent 8 }}
+      containers:
+        - name: postgres
+          image: {{ printf "%s:%s" .Values.postgres.image.repository .Values.postgres.image.tag | quote }}
+          env:
+            - name: POSTGRES_USER
+              value: onmyradar
+            - name: POSTGRES_DB
+              value: onmyradar
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "omr.postgresName" . }}
+                  key: POSTGRES_PASSWORD
+            # A subdirectory: the volume's root holds lost+found, which initdb refuses.
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+          ports:
+            - name: postgres
+              containerPort: 5432
+          startupProbe:
+            exec:
+              command: ['pg_isready', '-U', 'onmyradar', '-d', 'onmyradar']
+            periodSeconds: 2
+            failureThreshold: 60
+          readinessProbe:
+            exec:
+              command: ['pg_isready', '-U', 'onmyradar', '-d', 'onmyradar']
+            periodSeconds: 5
+          livenessProbe:
+            exec:
+              command: ['pg_isready', '-U', 'onmyradar', '-d', 'onmyradar']
+            periodSeconds: 20
+            timeoutSeconds: 5
+          resources:
+            {{- toYaml .Values.postgres.resources | nindent 12 }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ['ALL']
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql/data
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ['ReadWriteOnce']
+        {{- with .Values.postgres.persistence.storageClass }}
+        storageClassName: {{ . | quote }}
+        {{- end }}
+        resources:
+          requests:
+            storage: {{ .Values.postgres.persistence.size }}
+{{- end }}

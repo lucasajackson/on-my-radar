@@ -1,0 +1,66 @@
+# Every option on, to render and validate every template.
+publicUrl: https://notes.example.test/
+appUrl: https://app.example.test/
+nameOverride: omr
+image:
+  tag: v0.0.0-ci
+  pullPolicy: Always
+imagePullSecrets:
+  - name: registry
+signupMode: waitlist
+adminEmails: admin@example.test
+passwordLoginEnabled: true
+trustedIpHeader: x-real-ip
+mail:
+  provider: smtp
+  from: On My Radar <notes@example.test>
+oidc:
+  issuerUrl: https://sso.example.test/realms/main
+  clientId: on-my-radar
+  providerName: Example SSO
+s3:
+  endpoint: https://s3.example.test
+  bucket: omr
+extraEnv:
+  - name: LOG_LEVEL
+    value: debug
+secrets:
+  sessionSecret: ci-only-session-secret-not-used-anywhere-else
+  smtpUrl: smtp://user:ci-only-password@smtp.example.test:587
+  oidcClientSecret: ci-only-oidc-client-secret
+  s3AccessKey: ci-only-access
+  s3SecretKey: ci-only-secret-key
+app:
+  replicas: 2
+  podAnnotations: { example.test/annotation: app }
+  nodeSelector: { kubernetes.io/os: linux }
+  tolerations:
+    - { key: dedicated, operator: Exists }
+  affinity:
+    podAntiAffinity:
+      preferredDuringSchedulingIgnoredDuringExecution:
+        - weight: 100
+          podAffinityTerm:
+            topologyKey: kubernetes.io/hostname
+            labelSelector:
+              matchLabels: { app.kubernetes.io/component: app }
+worker:
+  replicas: 2
+  podAnnotations: { example.test/annotation: worker }
+  nodeSelector: { kubernetes.io/os: linux }
+service:
+  type: ClusterIP
+  port: 8080
+ingress:
+  enabled: true
+  className: nginx
+  annotations:
+    nginx.ingress.kubernetes.io/configuration-snippet: proxy_set_header X-Real-IP $remote_addr;
+  tls:
+    enabled: true
+    secretName: notes-tls
+postgres:
+  enabled: true
+  password: ci-only-postgres-password
+  persistence:
+    storageClass: standard

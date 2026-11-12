@@ -1,0 +1,35 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "omr.configName" . }}
+  labels:
+    {{- include "omr.labels" . | nindent 4 }}
+data:
+  PUBLIC_URL: {{ include "omr.publicUrl" . | quote }}
+  {{- with .Values.appUrl }}
+  APP_URL: {{ . | trimSuffix "/" | quote }}
+  {{- end }}
+  MIGRATE_ON_BOOT: {{ ternary "1" "" .Values.migrateOnBoot | quote }}
+  SIGNUP_MODE: {{ .Values.signupMode | quote }}
+  PASSWORD_LOGIN_ENABLED: {{ .Values.passwordLoginEnabled | toString | quote }}
+  TRUSTED_IP_HEADER: {{ .Values.trustedIpHeader | quote }}
+  {{- with .Values.adminEmails }}
+  ADMIN_EMAILS: {{ . | quote }}
+  {{- end }}
+  {{- with .Values.mail.provider }}
+  MAIL_PROVIDER: {{ . | quote }}
+  {{- end }}
+  {{- with .Values.mail.from }}
+  MAIL_FROM: {{ . | quote }}
+  {{- end }}
+  {{- if .Values.oidc.issuerUrl }}
+  OIDC_ISSUER_URL: {{ .Values.oidc.issuerUrl | quote }}
+  OIDC_CLIENT_ID: {{ .Values.oidc.clientId | quote }}
+  OIDC_PROVIDER_NAME: {{ .Values.oidc.providerName | quote }}
+  {{- end }}
+  {{- if .Values.s3.endpoint }}
+  S3_ENDPOINT: {{ .Values.s3.endpoint | quote }}
+  S3_REGION: {{ .Values.s3.region | quote }}
+  S3_BUCKET: {{ .Values.s3.bucket | quote }}
+  S3_FORCE_PATH_STYLE: {{ .Values.s3.forcePathStyle | toString | quote }}
+  {{- end }}

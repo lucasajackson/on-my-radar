@@ -137,6 +137,17 @@ export function marketplace(baseUrl, archiveName, sha256) {
 
 const sha = (bytes) => createHash('sha256').update(bytes).digest('hex');
 
+/** The plugin zip, its digest-bearing name, and marketplace.json bytes. Writes nothing. */
+function pluginArtifacts(baseUrl) {
+  const archive = zip(pluginFiles(baseUrl));
+  const sha256 = sha(archive);
+  const archiveName = `omr-plugin-${VERSION}-${sha256.slice(0, 12)}.zip`;
+  const market = Buffer.from(
+    `${JSON.stringify(marketplace(baseUrl.replace(/\/+$/, ''), archiveName, sha256), null, 2)}\n`,
+  );
+  return { archive, archiveName, sha256, market };
+}
+
 /**
  * The plugin zip and its marketplace.json. The zip's name carries its digest
  * as well as the version, so a URL always means the same bytes: it can be
@@ -144,13 +155,10 @@ const sha = (bytes) => createHash('sha256').update(bytes).digest('hex');
  * cannot leave a cached zip disagreeing with the sha256 in marketplace.json.
  */
 export function build({ out, baseUrl = DEFAULT_BASE_URL }) {
-  const archive = zip(pluginFiles(baseUrl));
-  const sha256 = sha(archive);
-  const archiveName = `omr-plugin-${VERSION}-${sha256.slice(0, 12)}.zip`;
+  const { archive, archiveName, sha256, market } = pluginArtifacts(baseUrl);
   mkdirSync(out, { recursive: true });
   writeFileSync(join(out, archiveName), archive);
-  const market = marketplace(baseUrl.replace(/\/+$/, ''), archiveName, sha256);
-  writeFileSync(join(out, 'marketplace.json'), `${JSON.stringify(market, null, 2)}\n`);
+  writeFileSync(join(out, 'marketplace.json'), market);
   return {
     archive: join(out, archiveName),
     archiveName,
@@ -159,30 +167,55 @@ export function build({ out, baseUrl = DEFAULT_BASE_URL }) {
   };
 }
 
-/**
- * Everything served at <origin>/agent-setup/, built in CI into the
- * UI bundle (`packages/ui` build) and never committed: the plugin zip and
- * marketplace.json, omr-agent.mjs, prompt.md stamped with the version, and
- * SHA256SUMS, which prompt.md tells the agent to check its download against.
- */
-export function buildSite({ out, baseUrl = DEFAULT_BASE_URL }) {
-  const plugin = build({ out, baseUrl });
+function siteParts(baseUrl) {
+  const plugin = pluginArtifacts(baseUrl);
   const agent = agentSource(baseUrl);
-  writeFileSync(join(out, 'omr-agent.mjs'), agent);
-  const prompt = readFileSync(join(here, 'prompt.md'), 'utf8')
-    .replaceAll('{{VERSION}}', VERSION)
-    .replaceAll('{{OMR_ORIGIN}}', new URL(baseUrl).origin);
+  const prompt = Buffer.from(
+    readFileSync(join(here, 'prompt.md'), 'utf8')
+      .replaceAll('{{VERSION}}', VERSION)
+      .replaceAll('{{OMR_ORIGIN}}', new URL(baseUrl).origin),
+  );
   if (prompt.includes('{{')) throw new Error('prompt.md has an unfilled placeholder');
-  writeFileSync(join(out, 'prompt.md'), prompt);
   const sums = [
     `${sha(agent)}  omr-agent.mjs`,
     `${plugin.sha256}  ${plugin.archiveName}`,
-    `${sha(Buffer.from(prompt))}  prompt.md`,
+    `${sha(prompt)}  prompt.md`,
   ];
-  writeFileSync(join(out, 'SHA256SUMS'), `${sums.join('\n')}\n`);
+  const files = new Map([
+    ['SHA256SUMS', Buffer.from(`${sums.join('\n')}\n`)],
+    ['marketplace.json', plugin.market],
+    ['omr-agent.mjs', agent],
+    [plugin.archiveName, plugin.archive],
+    ['prompt.md', prompt],
+  ]);
+  return { files, archiveName: plugin.archiveName, sha256: plugin.sha256 };
+}
+
+/**
+ * Everything served at <origin>/agent-setup/ as name -> bytes, stamped for
+ * `baseUrl`: the plugin zip and marketplace.json, omr-agent.mjs, prompt.md
+ * stamped with the version, and SHA256SUMS, which prompt.md tells the agent to
+ * check its download against. Pure: it writes nothing, so the server can build
+ * it once in memory for its configured PUBLIC_URL (`AGENT_SETUP_SRC`).
+ */
+export function siteFiles(baseUrl = DEFAULT_BASE_URL) {
+  return siteParts(baseUrl).files;
+}
+
+/**
+ * `siteFiles` written to disk. Built in CI into the UI bundle (`packages/ui`
+ * build) for the nginx image and never committed.
+ */
+export function buildSite({ out, baseUrl = DEFAULT_BASE_URL }) {
+  const { files, archiveName, sha256 } = siteParts(baseUrl);
+  mkdirSync(out, { recursive: true });
+  for (const [name, bytes] of files) writeFileSync(join(out, name), bytes);
   return {
-    ...plugin,
-    files: ['SHA256SUMS', 'marketplace.json', 'omr-agent.mjs', plugin.archiveName, 'prompt.md'],
+    archive: join(out, archiveName),
+    archiveName,
+    sha256,
+    marketplace: join(out, 'marketplace.json'),
+    files: [...files.keys()],
   };
 }
 

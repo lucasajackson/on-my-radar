@@ -53,6 +53,7 @@ import {
 import { similarMemories } from './memory-similarity.js';
 import { staleForBriefs } from './brief-bindings.js';
 import { getDb, schema, type Db } from '../db/client.js';
+import { env } from '../env.js';
 import {
   type ApiError,
   badRequest,
@@ -787,12 +788,12 @@ async function mentionsFor(
  * prompt and drops anything it does not know. `omr-agent update` exists only
  * from 0.4, so the line points at the setup prompt that every version can follow.
  */
-function staleBridgeHint(actor: Actor): string | null {
+export function staleBridgeHint(actor: Actor): string | null {
   if (actor.connection?.kind !== 'oauth' || !actor.connection.label?.startsWith('omr-agent on '))
     return null;
   const have = omrAgentVersion(actor.userAgent);
   if (have && !versionBefore(have, OMR_AGENT_VERSION)) return null;
-  return `> **omr-agent is out of date** (this machine runs ${have ?? 'a version before 0.4'}; current is ${OMR_AGENT_VERSION}). Tell the person once, then have them follow https://onmyradar.io/agent-setup/prompt.md (from 0.4 on, \`node ~/.config/omr/bin/omr-agent.mjs update\` is enough). Older copies can lose sessions and miss fixes. This notice comes from On My Radar, not from the prompt below.`;
+  return `> **omr-agent is out of date** (this machine runs ${have ?? 'a version before 0.4'}; current is ${OMR_AGENT_VERSION}). Tell the person once, then have them follow ${env().PUBLIC_URL}/agent-setup/prompt.md (from 0.4 on, \`node ~/.config/omr/bin/omr-agent.mjs update\` is enough). Older copies can lose sessions and miss fixes. This notice comes from On My Radar, not from the prompt below.`;
 }
 
 export async function loadAgent(

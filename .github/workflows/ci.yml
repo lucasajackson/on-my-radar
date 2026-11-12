@@ -39,9 +39,11 @@ jobs:
       VITEST_MAX_WORKERS: '2'
       VITEST_TEST_TIMEOUT: '30000'
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4 # the version comes from "packageManager"
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1 (the version comes from "packageManager")
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 22
           cache: pnpm
@@ -57,3 +59,26 @@ jobs:
       # Every migration on an empty database, twice: the second run must be a no-op.
       - run: pnpm migrate
       - run: pnpm migrate
+
+  # The Helm chart: lint, render with every values file, schema-check, and the refusals.
+  chart:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - run: sh charts/install-tools.sh "$RUNNER_TEMP/bin" && echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+      - run: sh charts/check.sh
+
+  # A real install: the runtime image in a kind cluster, cold, with two app replicas.
+  kind:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - run: sh charts/install-tools.sh "$RUNNER_TEMP/bin" && echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+      - run: docker build --target runtime -t onmyradar-smoke:ci .
+      - run: kind create cluster --name smoke --image kindest/node:v1.31.4@sha256:2cb39f7295fe7eafee0842b1052a599a4fb0f8bcf3f83d96c7f4864c357c6c30 --wait 120s
+      - run: kind load docker-image onmyradar-smoke:ci --name smoke
+      - run: sh charts/smoke.sh onmyradar-smoke ci

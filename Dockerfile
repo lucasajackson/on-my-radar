@@ -41,7 +41,8 @@ FROM deps AS build
 COPY tsconfig.base.json ./
 COPY packages ./packages
 # The UI build also builds <OMR_PUBLIC_URL>/agent-setup/ (plugin zip, marketplace.json,
-# omr-agent.mjs, prompt.md) from here, stamped with that origin; none of it is committed.
+# omr-agent.mjs, prompt.md) from here, stamped with that origin, for the nginx image; none of
+# it is committed. The runtime image ignores that copy and stamps from PUBLIC_URL at runtime.
 COPY agent-setup ./agent-setup
 ARG OMR_PUBLIC_URL=http://localhost:3500
 RUN pnpm --filter @onmyradar/contract build \
@@ -75,6 +76,10 @@ ENV NODE_ENV=production PORT=3500 UI_DIST_DIR=/app/packages/ui/dist
 # The server with its production node_modules, its migrations, and the SPA bundle.
 COPY --from=build --chown=onmyradar:onmyradar /out/server /app/packages/server
 COPY --from=release-ui --chown=onmyradar:onmyradar /release-ui /app/packages/ui/dist
+# The agent-setup source: the server stamps /agent-setup/ from the runtime PUBLIC_URL (the
+# bundle's copy above is stamped for OMR_PUBLIC_URL, which a shared image cannot know).
+COPY --from=build --chown=onmyradar:onmyradar /app/agent-setup /app/agent-setup
+ENV AGENT_SETUP_SRC=/app/agent-setup
 USER onmyradar
 EXPOSE 3500
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
