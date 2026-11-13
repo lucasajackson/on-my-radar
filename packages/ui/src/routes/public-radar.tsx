@@ -60,10 +60,11 @@ export function PublicRadarRoute() {
   }
 
   // The same width the signed-in page gives this layout (`PANES`), for the header, the posts and the
-  // footer alike. Not `contained` or `rail`: those are `RadarLayout`'s, and they are for a pane with a
-  // filter rail and an open item in `?sel=`. A public page has no filters and no `sel` in its address,
-  // so it stays one column of the template's own view (see the columns note in styles.css).
-  const { measure } = paneFor(templateFor(radar.template).layout);
+  // footer alike, and the same container where the layout is `contained`: the stream's card grid,
+  // the microblog's days | feed | photos and the index beside an open thread or decision all answer
+  // to the `radar` container, not the viewport. Without it a wide public page drew every one of them
+  // as a single column with 1800px lines. Not `rail`: a public page has no filters.
+  const { measure, contained } = paneFor(templateFor(radar.template).layout);
 
   return (
     // `public-radar` is the hook for the board's public sizing in styles.css.
@@ -115,7 +116,7 @@ export function PublicRadarRoute() {
           <BearingStrip timestamps={blips.map((blip) => blip.createdAt)} />
         </header>
 
-        <div className={`mx-auto ${measure} px-4 py-4 sm:px-6`}>
+        <div className={`mx-auto ${measure} px-4 py-4 sm:px-6 ${contained ? 'radar-pane' : ''}`}>
           {/*
           The radar's own template, not the stream.
 

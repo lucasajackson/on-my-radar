@@ -3073,6 +3073,9 @@
       grid-template-areas:
         'index panel'
         'index main';
+      /* The index spans both rows; without this its height is shared out between them, and the
+         facts strip grows a gap the height of the list above the open thread. */
+      grid-template-rows: auto 1fr;
       gap: 0.75rem 1.5rem;
     }
     .cols > .cols-index {
@@ -3093,6 +3096,7 @@
     .cols.cols-tri {
       grid-template-columns: 13rem minmax(0, 1fr) 18.75rem;
       grid-template-areas: 'index main panel';
+      grid-template-rows: auto;
     }
   }
   /* The log keeps its context beside the decision at lg too: a narrow column, not a strip above. */
@@ -3100,6 +3104,7 @@
     .cols.cols-lg3 {
       grid-template-columns: minmax(13rem, 15rem) minmax(0, 1fr) 13rem;
       grid-template-areas: 'index main panel';
+      grid-template-rows: auto;
     }
     .cols.cols-lg3 > .cols-panel {
       position: sticky;
@@ -3114,6 +3119,7 @@
     .cols {
       grid-template-columns: minmax(16rem, 22rem) minmax(0, 1fr) minmax(15rem, 20rem);
       grid-template-areas: 'index main panel';
+      grid-template-rows: auto;
     }
     /* The feed keeps its measure; the photos take what is left, so the three fill the pane. */
     .cols.cols-tri {

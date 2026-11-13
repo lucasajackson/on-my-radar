@@ -13,6 +13,9 @@ vi.mock('@tanstack/react-router', () => ({
   Link: ({ children }: { children: ReactNode }) => <a>{children}</a>,
   useParams: () => ({ slug: 'open-board' }),
   useRouter: () => undefined,
+  // The index-and-thread templates read the open item from `?sel=`; a public page opens with none.
+  useRouterState: ({ select }: { select: (state: unknown) => unknown }) =>
+    select({ location: { search: {} } }),
 }));
 
 const roots: Root[] = [];
@@ -64,7 +67,8 @@ async function page(template: string) {
 }
 
 // Every template, not just the board: the public page gives a layout the width it gets signed in.
-for (const template of ['kanban', 'stream', 'microblog', 'decision-log']) {
+const TEMPLATES = ['kanban', 'stream', 'microblog', 'decisions', 'discussion', 'reading'];
+for (const template of TEMPLATES) {
   it(`draws a public ${template} radar at the measure its layout declares, not 760px`, async () => {
     const { measure } = paneFor(templateFor(template).layout);
     const host = await page(template);
@@ -76,5 +80,17 @@ for (const template of ['kanban', 'stream', 'microblog', 'decision-log']) {
       expect(node?.className).not.toContain('760');
     }
     expect(host.querySelector('.public-radar')).not.toBeNull();
+  });
+}
+
+// A wide public page is only readable if the template's columns switch on: the stream's card grid,
+// the microblog's days | feed | photos, the index beside an open thread. Those answer to the `radar`
+// container, so a `contained` layout gets the same `.radar-pane` it has signed in; a board must not,
+// since size containment would trap its fixed-position popups.
+for (const template of TEMPLATES) {
+  it(`gives a public ${template} radar the radar container exactly when its layout is contained`, async () => {
+    const { contained } = paneFor(templateFor(template).layout);
+    const host = await page(template);
+    expect(host.querySelector('header + div')?.classList.contains('radar-pane')).toBe(contained);
   });
 }
