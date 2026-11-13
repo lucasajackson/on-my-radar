@@ -803,6 +803,7 @@ export function BlipCard({
               authorName={blip.author.name ?? blip.author.email.split('@')[0] ?? blip.author.email}
               agent={blip.agent}
               voice={blip.voice}
+              {...(publicSlug ? { plain: true } : {})}
             />
           ) : null}
           {/* The creator's byline never changes; whoever edited last is named beside it. */}
@@ -829,7 +830,8 @@ export function BlipCard({
               <Maximize2 className="h-3.5 w-3.5" aria-hidden="true" />
             </button>
           ) : null}
-          {canDiscuss ? (
+          {/* A public card with no comments has nothing to open: the icon is for a thread. */}
+          {canDiscuss && !(publicSlug && blip.commentCount === 0) ? (
             <button
               type="button"
               className="card-discuss instrument flex shrink-0 items-center gap-1 !tracking-normal"

@@ -35,17 +35,22 @@ export function Byline({
   agent,
   voice,
   className = '',
+  plain = false,
 }: {
   authorName: string;
   agent: AgentDto | null;
   voice: Voice | null;
   className?: string;
+  /** Public pages: the name the card leads with and nothing else. The cosign and the card are internal provenance. */
+  plain?: boolean;
 }) {
   const id = useId();
   const trigger = useRef<HTMLButtonElement>(null);
   const card = useRef<HTMLDivElement>(null);
   const closing = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { lead, cosigner } = bylineFor(authorName, agent?.name ?? null, voice);
+
+  if (plain) return <span className={`instrument byline ${className}`}>{lead}</span>;
 
   const text = (
     <>

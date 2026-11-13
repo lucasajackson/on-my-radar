@@ -3330,6 +3330,22 @@
   }
 
   /*
+    The published board. Signed in, a lane is a scroll box under a sticky header
+    (`100dvh - 15rem`); a public page has no sticky header and sits under nothing,
+    so that height left a short box and empty page below it. Here the lanes grow
+    with their cards and the page scrolls.
+
+    The floor is lower too. A public card has no edit, pin or delete (the controls
+    that set 288px), and without the sidebar a 1440px window gives the board 1392px,
+    which fits five lanes at 264px and not at 288px.
+  */
+  .public-radar .board {
+    --lane-floor: 264px;
+  }
+  .public-radar .board-column {
+    max-height: none;
+  }
+  /*
     A furled lane: a labelled rail, still a drop target. It reclaims a whole
     column's width for the lanes that are being worked in, without hiding the
     lane — a Done column you cannot see is a Done column you stop trusting.

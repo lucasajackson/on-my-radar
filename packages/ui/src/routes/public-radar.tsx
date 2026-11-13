@@ -7,7 +7,7 @@ import { templateFor } from '@onmyradar/contract';
 import { api } from '../lib/api';
 import { accentStyle } from '../lib/theme';
 import { queryKeys } from '../lib/session';
-import { TemplateView } from '../templates';
+import { TemplateView, paneFor } from '../templates';
 import { RadarSurface } from '../components/radar-surface';
 import { BearingStrip, Empty, Mark, RadarGlyph, Spinner } from '../components/primitives';
 import { useDocumentTitle } from '../lib/title';
@@ -59,8 +59,15 @@ export function PublicRadarRoute() {
     );
   }
 
+  // The same width the signed-in page gives this layout (`PANES`), for the header, the posts and the
+  // footer alike. Not `contained` or `rail`: those are `RadarLayout`'s, and they are for a pane with a
+  // filter rail and an open item in `?sel=`. A public page has no filters and no `sel` in its address,
+  // so it stays one column of the template's own view (see the columns note in styles.css).
+  const { measure } = paneFor(templateFor(radar.template).layout);
+
   return (
-    <div style={accentStyle(radar.accent)}>
+    // `public-radar` is the hook for the board's public sizing in styles.css.
+    <div className="public-radar" style={accentStyle(radar.accent)}>
       {/*
         The whole page, themed — header, posts and footer alike.
 
@@ -75,7 +82,9 @@ export function PublicRadarRoute() {
       */}
       <RadarSurface radar={radar} page>
         <header className="border-b border-[color:var(--line-soft)]">
-          <div className="mx-auto flex max-w-[760px] items-center justify-between gap-4 px-4 pt-5 pb-4 sm:px-6">
+          <div
+            className={`mx-auto flex ${measure} items-center justify-between gap-4 px-4 pt-5 pb-4 sm:px-6`}
+          >
             <div className="flex min-w-0 items-start gap-3">
               <span className="mt-0.5 text-[color:var(--accent-from)]">
                 <RadarGlyph glyph={radar.glyph} className="h-5 w-5" />
@@ -106,7 +115,7 @@ export function PublicRadarRoute() {
           <BearingStrip timestamps={blips.map((blip) => blip.createdAt)} />
         </header>
 
-        <div className="mx-auto max-w-[760px] px-4 py-4 sm:px-6">
+        <div className={`mx-auto ${measure} px-4 py-4 sm:px-6`}>
           {/*
           The radar's own template, not the stream.
 
@@ -152,7 +161,7 @@ export function PublicRadarRoute() {
           ) : null}
         </div>
 
-        <footer className="mx-auto max-w-[760px] px-4 py-10 text-center sm:px-6">
+        <footer className={`mx-auto ${measure} px-4 py-10 text-center sm:px-6`}>
           <Link to="/" className="instrument attribution hover:text-[color:var(--paper)]">
             Published with On My Radar
           </Link>
